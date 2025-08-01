@@ -50,6 +50,20 @@ export class Ticket {
   @UpdateDateColumn()
   updatedAt: Date;
 
+  // Después del campo 'status' o donde consideres conveniente
+
+  @Column({ default: false })
+  confirmadoPorUsuario: boolean;
+
+  @Column({ nullable: true })
+  fechaConfirmacion: Date; // opcional
+
+  @Column({ default: false })
+  rechazadoPorUsuario: boolean;
+
+
+  @Column({ nullable: true })
+  fechaRechazo: Date; // opcional
 
   @ManyToOne(() => User, (user) => user.ticketsAsignados, { eager: false })
   usuarioSolicitante: User;

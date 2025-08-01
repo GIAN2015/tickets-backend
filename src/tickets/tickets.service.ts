@@ -24,7 +24,7 @@ export class TicketsService {
     description: string;
     creatorId: number;
     usuarioSolicitanteId?: number;
-    prioridad?: 'muy_bajo' | 'bajo' | 'media' | 'alta' | 'muy_alta' ;
+    prioridad?: 'muy_bajo' | 'bajo' | 'media' | 'alta' | 'muy_alta';
   }) {
     const creator = await this.usersService.findById(ticketDto.creatorId);
     if (!creator) {
@@ -62,26 +62,29 @@ export class TicketsService {
 
     const relations = ['creator', 'usuarioSolicitante'];
 
-    if (user.role === 'admin') {
-      return this.ticketRepo.find({ relations });
-    }
+    let tickets: Ticket[] = [];
 
-    if (user.role === 'user') {
-      return this.ticketRepo.find({
+    if (user.role === 'admin') {
+      tickets = await this.ticketRepo.find({ relations });
+    } else if (user.role === 'user') {
+      tickets = await this.ticketRepo.find({
         where: { creator: { id: user.id } },
         relations,
       });
+    } else if (user.role === 'ti') {
+      tickets = await this.ticketRepo.find({ relations });
     }
 
-    if (user.role === 'ti') {
-      return this.ticketRepo.find({
-        relations,
-      });
-    }
+    // 👇 DEBUG: revisa que venga confirmadoPorUsuario
+    console.log('Tickets enviados:', tickets.map(t => ({
+      id: t.id,
+      status: t.status,
+      confirmadoPorUsuario: t.confirmadoPorUsuario,
+    })));
 
-
-    return [];
+    return tickets;
   }
+
 
 
 
@@ -141,46 +144,35 @@ export class TicketsService {
 
     console.log('Ticket encontrado:', ticket);
 
+    // 👉 BLOQUE USUARIO NORMAL (NO PUEDE CAMBIAR STATUS NI PRIORIDAD)
     if (user.role === 'user') {
       if (ticket.createdBy.id !== user.id) {
-        console.log('❌ Usuario no es el creador del ticket');
         throw new ForbiddenException('No tienes permiso para modificar este ticket');
       }
 
-      if (ticket.assignedTo) {
-        console.log('❌ Ticket ya asignado, no se puede cambiar prioridad');
-        throw new BadRequestException('No puedes cambiar la prioridad de un ticket asignado');
-      }
+      throw new ForbiddenException('No puedes modificar el estado o la prioridad de este ticket');
+    }
 
+    // 👉 BLOQUE PERSONAL TI
+    if (user.role === 'ti') {
       if (updateTicketDto.status) {
+        // ⛔ No permitir marcar como completado si el usuario no ha confirmado
+        if (updateTicketDto.status === 'completado' && !ticket.confirmadoPorUsuario) {
+          throw new BadRequestException('El ticket no ha sido confirmado por el usuario aún');
+        }
+
         ticket.status = updateTicketDto.status;
+        console.log('✅ TI actualiza status a:', updateTicketDto.status);
       }
 
       if (updateTicketDto.prioridad) {
         ticket.prioridad = updateTicketDto.prioridad;
+        console.log('✅ TI actualiza prioridad a:', updateTicketDto.prioridad);
       }
-
-
-
-      if (updateTicketDto.status) {
-        console.log('✅ Actualizando status a:', updateTicketDto.status);
-        ticket.status = updateTicketDto.status;
-      }
-    } else if (user.role === 'admin') {
-      if (updateTicketDto.status) {
-        console.log('✅ Admin actualiza status a:', updateTicketDto.status);
-        ticket.status = updateTicketDto.status;
-      }
-
-      if (updateTicketDto.prioridad) {
-        console.log('✅ Admin actualiza prioridad a:', updateTicketDto.prioridad);
-        ticket.prioridad = updateTicketDto.prioridad;
-      }
-    } Object.assign(ticket, updateTicketDto);
+    }
 
     return this.ticketRepo.save(ticket);
   }
-
 
 
 
@@ -190,6 +182,63 @@ export class TicketsService {
       relations: ['creator', 'assignedTo'], // Asegúrate de tener esta relación en tu entidad
     });
   }
+
+  async confirmarResolucion(ticketId: number, user: { id: number }) {
+    const ticket = await this.ticketRepo.findOne({
+      where: { id: ticketId },
+      relations: ['creator'],
+    });
+
+    console.log('Ticket encontrado:', ticket);
+    console.log('Usuario autenticado:', user);
+
+    if (!ticket) {
+      throw new NotFoundException('Ticket no encontrado');
+    }
+
+    if (ticket.creator.id !== user.id) {
+      throw new ForbiddenException('No puedes confirmar este ticket');
+    }
+
+    console.log('Estado del ticket:', ticket.status);
+    console.log('Confirmado por usuario:', ticket.confirmadoPorUsuario);
+
+    if (ticket.status !== 'resuelto') {
+      throw new BadRequestException('Solo puedes confirmar tickets que están en estado resuelto');
+    }
+
+    if (ticket.confirmadoPorUsuario) {
+      throw new BadRequestException('Ya confirmaste este ticket');
+    }
+    console.log('Tipo de confirmadoPorUsuario:', typeof ticket.confirmadoPorUsuario);
+    console.log('Valor de confirmadoPorUsuario:', ticket.confirmadoPorUsuario);
+
+    ticket.confirmadoPorUsuario = true;
+    ticket.fechaConfirmacion = new Date();
+    return this.ticketRepo.save(ticket);
+  }
+
+
+
+  async rechazarResolucion(ticketId: number, user: { id: number }) {
+    const ticket = await this.ticketRepo.findOne({
+      where: { id: ticketId },
+      relations: ['creator'],
+    });
+
+    if (!ticket) throw new NotFoundException('Ticket no encontrado');
+    if (ticket.creator.id !== user.id) throw new ForbiddenException('No autorizado');
+    if (ticket.status !== 'resuelto') throw new BadRequestException('El ticket no está resuelto');
+    if (ticket.rechazadoPorUsuario) throw new BadRequestException('Ya lo rechazaste');
+
+    ticket.rechazadoPorUsuario = true;
+    ticket.fechaRechazo = new Date();
+
+    return this.ticketRepo.save(ticket);
+  }
+
+
+
 
 }
 

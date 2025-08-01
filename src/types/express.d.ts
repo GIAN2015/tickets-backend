@@ -1,10 +1,12 @@
-// src/types/express.d.ts
-import { User } from '../../users/entities/user.entity';
+// types/express.d.ts
+import { User } from 'src/users/entities/user.entity';
 
-declare global {
-  namespace Express {
-    interface Request {
-      user: User;
-    }
+declare module 'express' {
+  interface Request {
+    user: {
+      id: number;
+      role: string;
+      username?: string;
+    } & Partial<User>;
   }
 }
