@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { Ticket } from 'src/tickets/ticket.entity';
 import { UsersService } from 'src/users/users.service';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
-import { User } from 'src/users/entities/user.entity'; // ✅ Import correcto del User
+import { User } from 'src/users/entities/user.entity';
 
 @Injectable()
 export class TicketsService {
@@ -14,7 +14,7 @@ export class TicketsService {
     private ticketRepo: Repository<Ticket>,
 
     @InjectRepository(User)
-    private userRepo: Repository<User>, // ✅ Asegúrate que está importado
+    private userRepo: Repository<User>,
 
     private usersService: UsersService,
   ) { }
@@ -45,10 +45,13 @@ export class TicketsService {
       description: ticketDto.description,
       prioridad: ticketDto.prioridad ?? 'media',
       creator: creator, // Cambiado de 'createdBy' a 'creator'
-      usuarioSolicitante,
+      usuarioSolicitante: usuarioSolicitante ?? undefined,
+
     });
 
-    return this.ticketRepo.save(ticket);
+    const saved = await this.ticketRepo.save(ticket);
+    console.log('Ticket guardado:', saved);
+    return saved;
   }
 
 
@@ -67,22 +70,26 @@ export class TicketsService {
     if (user.role === 'admin') {
       tickets = await this.ticketRepo.find({ relations });
     } else if (user.role === 'user') {
-      tickets = await this.ticketRepo.find({
-        where: { creator: { id: user.id } },
-        relations,
-      });
-    } else if (user.role === 'ti') {
-      tickets = await this.ticketRepo.find({ relations });
-    }
+      tickets = await this.ticketRepo
+        .createQueryBuilder('ticket')
+        .leftJoinAndSelect('ticket.creator', 'creator')
+        .leftJoinAndSelect('ticket.usuarioSolicitante', 'usuarioSolicitante')
+        .where('creator.id = :id', { id: user.id })
+        .orWhere('usuarioSolicitante.id = :id', { id: user.id })
+        .getMany();
+    
+  } else if(user.role === 'ti') {
+  tickets = await this.ticketRepo.find({ relations });
+}
 
-    // 👇 DEBUG: revisa que venga confirmadoPorUsuario
-    console.log('Tickets enviados:', tickets.map(t => ({
-      id: t.id,
-      status: t.status,
-      confirmadoPorUsuario: t.confirmadoPorUsuario,
-    })));
+// 👇 DEBUG: revisa que venga confirmadoPorUsuario
+console.log('Tickets enviados:', tickets.map(t => ({
+  id: t.id,
+  status: t.status,
+  confirmadoPorUsuario: t.confirmadoPorUsuario,
+})));
 
-    return tickets;
+return tickets;
   }
 
 
@@ -90,152 +97,152 @@ export class TicketsService {
 
 
   async findByCreatorId(userId: number) {
-    return this.ticketRepo.find({
-      where: { creator: { id: userId } },
-      relations: ['creator', 'usuarioSolicitante'],
-    });
-  }
+  return this.ticketRepo.find({
+    where: { creator: { id: userId } },
+    relations: ['creator', 'usuarioSolicitante'],
+  });
+}
 
   async findByAssignedId(userId: number) {
-    return this.ticketRepo
-      .createQueryBuilder('ticket')
-      .leftJoinAndSelect('ticket.creator', 'creator')
-      .leftJoinAndSelect('ticket.usuarioSolicitante', 'usuarioSolicitante')
-      .where('usuarioSolicitante.id = :id', { id: userId })
-      .getMany();
-  }
+  return this.ticketRepo
+    .createQueryBuilder('ticket')
+    .leftJoinAndSelect('ticket.creator', 'creator')
+    .leftJoinAndSelect('ticket.usuarioSolicitante', 'usuarioSolicitante')
+    .where('usuarioSolicitante.id = :id', { id: userId })
+    .getMany();
+}
 
 
 
   async findOne(id: number) {
-    const ticket = await this.ticketRepo.findOne({
-      where: { id },
-      relations: ['creator', 'assignedTo'],
-    });
+  const ticket = await this.ticketRepo.findOne({
+    where: { id },
+    relations: ['creator', 'usuarioSolicitante'],
+  });
 
-    // No se debe crear un registro de historial al consultar un ticket
-    return ticket;
-  }
+  // No se debe crear un registro de historial al consultar un ticket
+  return ticket;
+}
 
 
   async assignToTicket(id: number, userId: number) {
-    const ticket = await this.ticketRepo.findOneBy({ id });
-    const user = await this.usersService.findById(userId);
-    if (!ticket || !user) return null;
+  const ticket = await this.ticketRepo.findOneBy({ id });
+  const user = await this.usersService.findById(userId);
+  if (!ticket || !user) return null;
 
-    ticket.assignedTo = user;
-    return this.ticketRepo.save(ticket);
-  }
+  ticket.assignedTo = user;
+  return this.ticketRepo.save(ticket);
+}
 
 
   async update(id: number, updateTicketDto: UpdateTicketDto, user: User) {
-    console.log('Usuario que actualiza:', user);
-    console.log('DTO recibido:', updateTicketDto);
+  console.log('Usuario que actualiza:', user);
+  console.log('DTO recibido:', updateTicketDto);
 
-    const ticket = await this.ticketRepo.findOne({
-      where: { id },
-      relations: ['createdBy', 'assignedTo'],
-    });
+  const ticket = await this.ticketRepo.findOne({
+    where: { id },
+    relations: ['createdBy', 'usuarioSolicitante'],
+  });
 
-    if (!ticket) {
-      console.log('❌ Ticket no encontrado');
-      throw new NotFoundException('Ticket no encontrado');
-    }
-
-    console.log('Ticket encontrado:', ticket);
-
-    // 👉 BLOQUE USUARIO NORMAL (NO PUEDE CAMBIAR STATUS NI PRIORIDAD)
-    if (user.role === 'user') {
-      if (ticket.createdBy.id !== user.id) {
-        throw new ForbiddenException('No tienes permiso para modificar este ticket');
-      }
-
-      throw new ForbiddenException('No puedes modificar el estado o la prioridad de este ticket');
-    }
-
-    // 👉 BLOQUE PERSONAL TI
-    if (user.role === 'ti') {
-      if (updateTicketDto.status) {
-        // ⛔ No permitir marcar como completado si el usuario no ha confirmado
-        if (updateTicketDto.status === 'completado' && !ticket.confirmadoPorUsuario) {
-          throw new BadRequestException('El ticket no ha sido confirmado por el usuario aún');
-        }
-
-        ticket.status = updateTicketDto.status;
-        console.log('✅ TI actualiza status a:', updateTicketDto.status);
-      }
-
-      if (updateTicketDto.prioridad) {
-        ticket.prioridad = updateTicketDto.prioridad;
-        console.log('✅ TI actualiza prioridad a:', updateTicketDto.prioridad);
-      }
-    }
-
-    return this.ticketRepo.save(ticket);
+  if (!ticket) {
+    console.log('❌ Ticket no encontrado');
+    throw new NotFoundException('Ticket no encontrado');
   }
+
+  console.log('Ticket encontrado:', ticket);
+
+  // 👉 BLOQUE USUARIO NORMAL (NO PUEDE CAMBIAR STATUS NI PRIORIDAD)
+  if (user.role === 'user') {
+    if (ticket.createdBy.id !== user.id) {
+      throw new ForbiddenException('No tienes permiso para modificar este ticket');
+    }
+
+    throw new ForbiddenException('No puedes modificar el estado o la prioridad de este ticket');
+  }
+
+  // 👉 BLOQUE PERSONAL TI
+  if (user.role === 'ti') {
+    if (updateTicketDto.status) {
+      // ⛔ No permitir marcar como completado si el usuario no ha confirmado
+      if (updateTicketDto.status === 'completado' && !ticket.confirmadoPorUsuario) {
+        throw new BadRequestException('El ticket no ha sido confirmado por el usuario aún');
+      }
+
+      ticket.status = updateTicketDto.status;
+      console.log('✅ TI actualiza status a:', updateTicketDto.status);
+    }
+
+    if (updateTicketDto.prioridad) {
+      ticket.prioridad = updateTicketDto.prioridad;
+      console.log('✅ TI actualiza prioridad a:', updateTicketDto.prioridad);
+    }
+  }
+
+  return this.ticketRepo.save(ticket);
+}
 
 
 
   async findOneWithUser(id: number) {
-    return this.ticketRepo.findOne({
-      where: { id },
-      relations: ['creator', 'assignedTo'], // Asegúrate de tener esta relación en tu entidad
-    });
-  }
+  return this.ticketRepo.findOne({
+    where: { id },
+    relations: ['creator', 'usuarioSolicitante'], // Asegúrate de tener esta relación en tu entidad
+  });
+}
 
   async confirmarResolucion(ticketId: number, user: { id: number }) {
-    const ticket = await this.ticketRepo.findOne({
-      where: { id: ticketId },
-      relations: ['creator'],
-    });
+  const ticket = await this.ticketRepo.findOne({
+    where: { id: ticketId },
+    relations: ['creator', 'usuarioSolicitante'],
+  });
 
-    console.log('Ticket encontrado:', ticket);
-    console.log('Usuario autenticado:', user);
+  console.log('Ticket encontrado:', ticket);
+  console.log('Usuario autenticado:', user);
 
-    if (!ticket) {
-      throw new NotFoundException('Ticket no encontrado');
-    }
-
-    if (ticket.creator.id !== user.id) {
-      throw new ForbiddenException('No puedes confirmar este ticket');
-    }
-
-    console.log('Estado del ticket:', ticket.status);
-    console.log('Confirmado por usuario:', ticket.confirmadoPorUsuario);
-
-    if (ticket.status !== 'resuelto') {
-      throw new BadRequestException('Solo puedes confirmar tickets que están en estado resuelto');
-    }
-
-    if (ticket.confirmadoPorUsuario) {
-      throw new BadRequestException('Ya confirmaste este ticket');
-    }
-    console.log('Tipo de confirmadoPorUsuario:', typeof ticket.confirmadoPorUsuario);
-    console.log('Valor de confirmadoPorUsuario:', ticket.confirmadoPorUsuario);
-
-    ticket.confirmadoPorUsuario = true;
-    ticket.fechaConfirmacion = new Date();
-    return this.ticketRepo.save(ticket);
+  if (!ticket) {
+    throw new NotFoundException('Ticket no encontrado');
   }
+
+  if (ticket.creator.id !== user.id) {
+    throw new ForbiddenException('No puedes confirmar este ticket');
+  }
+
+  console.log('Estado del ticket:', ticket.status);
+  console.log('Confirmado por usuario:', ticket.confirmadoPorUsuario);
+
+  if (ticket.status !== 'resuelto') {
+    throw new BadRequestException('Solo puedes confirmar tickets que están en estado resuelto');
+  }
+
+  if (ticket.confirmadoPorUsuario) {
+    throw new BadRequestException('Ya confirmaste este ticket');
+  }
+  console.log('Tipo de confirmadoPorUsuario:', typeof ticket.confirmadoPorUsuario);
+  console.log('Valor de confirmadoPorUsuario:', ticket.confirmadoPorUsuario);
+
+  ticket.confirmadoPorUsuario = true;
+  ticket.fechaConfirmacion = new Date();
+  return this.ticketRepo.save(ticket);
+}
 
 
 
   async rechazarResolucion(ticketId: number, user: { id: number }) {
-    const ticket = await this.ticketRepo.findOne({
-      where: { id: ticketId },
-      relations: ['creator'],
-    });
+  const ticket = await this.ticketRepo.findOne({
+    where: { id: ticketId },
+    relations: ['creator', 'usuarioSolicitante'],
+  });
 
-    if (!ticket) throw new NotFoundException('Ticket no encontrado');
-    if (ticket.creator.id !== user.id) throw new ForbiddenException('No autorizado');
-    if (ticket.status !== 'resuelto') throw new BadRequestException('El ticket no está resuelto');
-    if (ticket.rechazadoPorUsuario) throw new BadRequestException('Ya lo rechazaste');
+  if (!ticket) throw new NotFoundException('Ticket no encontrado');
+  if (ticket.creator.id !== user.id) throw new ForbiddenException('No autorizado');
+  if (ticket.status !== 'resuelto') throw new BadRequestException('El ticket no está resuelto');
+  if (ticket.rechazadoPorUsuario) throw new BadRequestException('Ya lo rechazaste');
 
-    ticket.rechazadoPorUsuario = true;
-    ticket.fechaRechazo = new Date();
+  ticket.rechazadoPorUsuario = true;
+  ticket.fechaRechazo = new Date();
 
-    return this.ticketRepo.save(ticket);
-  }
+  return this.ticketRepo.save(ticket);
+}
 
 
 

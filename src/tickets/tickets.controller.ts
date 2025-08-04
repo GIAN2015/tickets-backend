@@ -36,7 +36,12 @@ export class TicketsController {
 
   @Post()
   create(
-    @Body() dto: { title: string; description: string },
+    @Body() dto: {
+      title: string;
+      description: string;
+      usuarioSolicitanteId?: number;
+      prioridad?: 'muy_bajo' | 'bajo' | 'media' | 'alta' | 'muy_alta';
+    },
     @Req() req: RequestWithUser,
   ) {
     return this.ticketsService.create({
@@ -44,6 +49,7 @@ export class TicketsController {
       creatorId: req.user.id,
     });
   }
+
   // tickets.controller.ts
   @Get()
   async getAll(@Req() req: RequestWithUser) {
@@ -72,6 +78,8 @@ export class TicketsController {
     return [];
   }
 
+  
+
   @Patch(':id')
   async update(
     @Param('id') id: number,
@@ -88,6 +96,8 @@ export class TicketsController {
     return this.ticketsService.update(+id, updateTicketDto, user);
   }
 
+
+  
   @Patch(':id/confirmar')
   @UseGuards(JwtAuthGuard)
   async confirmarResolucion(
@@ -103,14 +113,14 @@ export class TicketsController {
 
 
 
- @Patch(':id/rechazar')
-@UseGuards(JwtAuthGuard)
-async rechazarResolucion(
-  @Param('id') id: number,
-  @Req() req: RequestWithUser,
-) {
-  return this.ticketsService.rechazarResolucion(+id, req.user);
-}
+  @Patch(':id/rechazar')
+  @UseGuards(JwtAuthGuard)
+  async rechazarResolucion(
+    @Param('id') id: number,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.ticketsService.rechazarResolucion(+id, req.user);
+  }
 
 
 }

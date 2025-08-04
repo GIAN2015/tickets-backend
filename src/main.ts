@@ -12,6 +12,7 @@ async function bootstrap() {
   });
 
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }));
+  app.setGlobalPrefix('api');
 
   await app.listen(3001); // Puerto de tu backend
 }

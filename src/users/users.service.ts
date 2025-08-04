@@ -6,6 +6,7 @@ import { CreateUserDto } from 'src/users/dto/create-user.dto';
 
 @Injectable()
 export class UsersService {
+  prisma: any;
   async findAll(): Promise<User[]> {
     return this.userRepository.find();
   }
@@ -28,5 +29,8 @@ export class UsersService {
   async findById(id: number): Promise<User | null> {
     return this.userRepository.findOne({ where: { id } });
   }
+
+
+
 }
 

@@ -65,8 +65,13 @@ export class Ticket {
   @Column({ nullable: true })
   fechaRechazo: Date; // opcional
 
-  @ManyToOne(() => User, (user) => user.ticketsAsignados, { eager: false })
+  @Column({ nullable: true })
+  usuarioSolicitanteId: number;
+
+  @ManyToOne(() => User, (user) => user.ticketsAsignados, { eager: true, nullable: true })
+  @JoinColumn({ name: 'usuarioSolicitanteId' })
   usuarioSolicitante: User;
+
 
   history: any;
   user: any;
