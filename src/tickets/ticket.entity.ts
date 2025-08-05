@@ -10,6 +10,13 @@ import {
 } from 'typeorm';
 import { User } from 'src/users/entities/user.entity';
 import { TicketHistory } from './entities/ticket-history.entity/ticket-history.entity';
+export enum Categoria {
+  MANTENIMIENTO = 'MANTENIMIENTO',
+  HARDWARE = 'HARDWARE',
+  SOFTWARE = 'SOFTWARE',
+  REDES = 'REDES',
+  OTROS = 'OTROS',
+}
 
 @Entity()
 export class Ticket {
@@ -80,5 +87,11 @@ export class Ticket {
   @JoinColumn({ name: 'created_by' })
   createdBy: User;
 
-}
 
+
+  @Column({
+    type: 'text', // SQLite no soporta enum nativo
+    default: Categoria.OTROS,
+  })
+  categoria: Categoria;
+}

@@ -20,6 +20,7 @@ import { TicketHistory } from './entities/ticket-history.entity/ticket-history.e
 import { Repository } from 'typeorm';
 import { User } from 'src/users/entities/user.entity';
 import { request } from 'http';
+import { Categoria } from './ticket.entity';
 
 @UseGuards(JwtAuthGuard)
 @Controller('tickets')
@@ -39,6 +40,7 @@ export class TicketsController {
     @Body() dto: {
       title: string;
       description: string;
+      categoria?: 'mantenimiento' | 'hardware' | 'software' | 'redes' | 'otros';
       usuarioSolicitanteId?: number;
       prioridad?: 'muy_bajo' | 'bajo' | 'media' | 'alta' | 'muy_alta';
     },
@@ -47,6 +49,7 @@ export class TicketsController {
     return this.ticketsService.create({
       ...dto,
       creatorId: req.user.id,
+      categoria: dto.categoria ? Categoria[dto.categoria.toUpperCase()] : undefined,
     });
   }
 
@@ -78,7 +81,7 @@ export class TicketsController {
     return [];
   }
 
-  
+
 
   @Patch(':id')
   async update(
@@ -97,7 +100,7 @@ export class TicketsController {
   }
 
 
-  
+
   @Patch(':id/confirmar')
   @UseGuards(JwtAuthGuard)
   async confirmarResolucion(
@@ -122,5 +125,9 @@ export class TicketsController {
     return this.ticketsService.rechazarResolucion(+id, req.user);
   }
 
+  @Patch(':id/reset-rechazo')
+  async resetRechazo(@Param('id') id: number) {
+    return this.ticketsService.actualizarRechazo(+id, false);
+  }
 
 }
