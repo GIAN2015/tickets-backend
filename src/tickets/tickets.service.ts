@@ -208,9 +208,13 @@ export class TicketsService {
       throw new NotFoundException('Ticket no encontrado');
     }
 
-    if (ticket.creator.id !== user.id) {
+    const esSolicitante = ticket.usuarioSolicitante?.id === user.id;
+    const esCreador = ticket.creator?.id === user.id;
+
+    if (!esSolicitante && !esCreador) {
       throw new ForbiddenException('No puedes confirmar este ticket');
     }
+
 
     console.log('Estado del ticket:', ticket.status);
     console.log('Confirmado por usuario:', ticket.confirmadoPorUsuario);
