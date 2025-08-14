@@ -9,7 +9,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { User } from 'src/users/entities/user.entity';
-import { TicketHistory } from './entities/ticket-history.entity/ticket-history.entity';
+import { TicketHistory } from 'src/tickets/entities/tickethistory.entity/tickethistory.entity';
 export enum Categoria {
   MANTENIMIENTO = 'MANTENIMIENTO',
   HARDWARE = 'HARDWARE',
@@ -30,11 +30,12 @@ export class Ticket {
   description: string;
 
   @Column({ default: 'no iniciado' })
-  status: 'no iniciado' | 'asignado' | 'en proceso' | 'resuelto' | 'completado';
+  status: 'no iniciado' | 'asignado' | 'en proceso' | 'en_espera' | 'resuelto' | 'completado';
 
   @CreateDateColumn()
   createdAt: Date;
-
+  @Column({ nullable: true })
+  statusAnterior?: string;
   @Column({ nullable: true })
   startedAt?: Date;
 
@@ -58,6 +59,8 @@ export class Ticket {
   updatedAt: Date;
 
   // Después del campo 'status' o donde consideres conveniente
+  @Column({ default: 'incidencia' })
+  tipo: 'requerimiento' | 'incidencia' | 'consulta';
 
   @Column({ default: false })
   confirmadoPorUsuario: boolean;
@@ -80,18 +83,28 @@ export class Ticket {
   usuarioSolicitante: User;
 
 
-  history: any;
-  user: any;
+
 
   @ManyToOne(() => User, user => user.createdTickets)
   @JoinColumn({ name: 'created_by' })
   createdBy: User;
 
+  @Column({ nullable: true })
+  archivoNombre: string;
 
+  @Column({ nullable: true })
+  adjuntoNombre: string;
+
+  @Column({ nullable: true })
+  message: string;
+
+  @OneToMany(() => TicketHistory, history => history.ticket)
+  histories: TicketHistory[];
 
   @Column({
     type: 'text', // SQLite no soporta enum nativo
     default: Categoria.OTROS,
   })
   categoria: Categoria;
+
 }

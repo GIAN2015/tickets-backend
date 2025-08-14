@@ -6,6 +6,7 @@ import { UsersService } from 'src/users/users.service';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { User } from 'src/users/entities/user.entity';
 import { Categoria } from './ticket.entity';
+import { TicketHistory } from 'src/tickets/entities/tickethistory.entity/tickethistory.entity';
 @Injectable()
 export class TicketsService {
 
@@ -16,14 +17,19 @@ export class TicketsService {
     @InjectRepository(User)
     private userRepo: Repository<User>,
 
+    @InjectRepository(TicketHistory)
+    private historyRepo: Repository<TicketHistory>, // <-- ¡AGREGA ESTA LÍNEA!
+
     private usersService: UsersService,
   ) { }
 
   async create(ticketDto: {
+    archivoNombre: string | undefined;
     title: string;
     description: string;
     creatorId: number;
     categoria?: keyof typeof Categoria;
+    tipo?: 'requerimiento' | 'incidencia' | 'consulta';
     usuarioSolicitanteId?: number;
     prioridad?: 'muy_bajo' | 'bajo' | 'media' | 'alta' | 'muy_alta';
   }) {
@@ -54,7 +60,9 @@ export class TicketsService {
       prioridad: ticketDto.prioridad ?? 'media',
       categoria: categoriaValida,
       creator: creator,
+      tipo: ticketDto.tipo ?? 'incidencia',
       usuarioSolicitante: usuarioSolicitante,
+      archivoNombre: ticketDto.archivoNombre,
     });
 
     const saved = await this.ticketRepo.save(ticket);
@@ -139,10 +147,17 @@ export class TicketsService {
     return this.ticketRepo.save(ticket);
   }
 
+  async message(message: string, user: { id: number; username: string; role: "admin" | "user" | "ti"; }) {
+    console.log('Mensaje recibido:', message);
+  }
 
-  async update(id: number, updateTicketDto: UpdateTicketDto, user: User) {
+
+
+
+  async update(id: number, updateTicketDto: UpdateTicketDto, user: User, archivoNombre?: string) {
     console.log('Usuario que actualiza:', user);
     console.log('DTO recibido:', updateTicketDto);
+    const cambios: Partial<TicketHistory> = {};
 
     const ticket = await this.ticketRepo.findOne({
       where: { id },
@@ -156,36 +171,81 @@ export class TicketsService {
 
     console.log('Ticket encontrado:', ticket);
 
-    // 👉 BLOQUE USUARIO NORMAL (NO PUEDE CAMBIAR STATUS NI PRIORIDAD)
-    if (user.role === 'user') {
-      if (ticket.createdBy.id !== user.id) {
-        throw new ForbiddenException('No tienes permiso para modificar este ticket');
-      }
 
-      throw new ForbiddenException('No puedes modificar el estado o la prioridad de este ticket');
+
+
+    if (user.role === 'user') {
+    
+
+      if (!updateTicketDto.message && !archivoNombre) {
+        throw new ForbiddenException('Solo puedes agregar un mensaje o adjuntar un archivo');
+      }
     }
 
-    // 👉 BLOQUE PERSONAL TI
-    if (user.role === 'ti') {
-      if (updateTicketDto.status) {
-        // ⛔ No permitir marcar como completado si el usuario no ha confirmado
-        if (updateTicketDto.status === 'completado' && !ticket.confirmadoPorUsuario) {
-          throw new BadRequestException('El ticket no ha sido confirmado por el usuario aún');
-        }
 
+    if (archivoNombre) {
+      ticket.archivoNombre = archivoNombre;
+    }
+
+    if (updateTicketDto.message) {
+      ticket.message = updateTicketDto.message;
+    }
+
+    if (user.role === 'ti') {
+      if (updateTicketDto.status && updateTicketDto.status !== ticket.status) {
+        cambios.statusAnterior = ticket.status;
+        cambios.statusNuevo = updateTicketDto.status;
+
+        // Solo actualiza si cambió
         ticket.status = updateTicketDto.status;
         console.log('✅ TI actualiza status a:', updateTicketDto.status);
       }
 
-      if (updateTicketDto.prioridad) {
+      if (updateTicketDto.prioridad && updateTicketDto.prioridad !== ticket.prioridad) {
+        cambios.prioridadAnterior = ticket.prioridad;
+        cambios.prioridadNueva = updateTicketDto.prioridad;
+
         ticket.prioridad = updateTicketDto.prioridad;
         console.log('✅ TI actualiza prioridad a:', updateTicketDto.prioridad);
       }
+
     }
 
-    return this.ticketRepo.save(ticket);
-  }
+    if (Object.keys(cambios).length > 0 ||
+      updateTicketDto.message ||
+      archivoNombre) {
+      const historial = this.historyRepo.create({
+        ticket,
+        prioridadAnterior: cambios.prioridadAnterior,
+        prioridadNueva: cambios.prioridadNueva,
+        statusAnterior: cambios.statusAnterior,
+        statusNuevo: cambios.statusNuevo,
+        mensaje: updateTicketDto.message,
+        adjuntoNombre: archivoNombre,
 
+      });
+      await this.historyRepo.save(historial)
+        ;
+      console.log('📜 Historial guardado:', historial);
+    }
+    if (archivoNombre) {
+      ticket.archivoNombre = archivoNombre; // Asegúrate de que este campo exista en la entidad Ticket
+    }
+
+
+    return this.ticketRepo.save(ticket);
+
+
+
+
+  }
+  async obtenerHistorial(ticketId: number) {
+    return this.historyRepo.find({
+      where: { ticket: { id: ticketId } },
+      relations: ['ticket', 'actualizadoPor'],
+      order: { fecha: 'DESC' },
+    });
+  }
 
 
   async findOneWithUser(id: number) {
@@ -236,32 +296,44 @@ export class TicketsService {
 
 
 
-  async rechazarResolucion(ticketId: number, user: { id: number }) {
+  async rechazarResolucion(ticketId: number, userId: number) {
     const ticket = await this.ticketRepo.findOne({
       where: { id: ticketId },
-      relations: ['creator', 'usuarioSolicitante'],
+      relations: ['usuarioSolicitante'],
     });
 
     if (!ticket) throw new NotFoundException('Ticket no encontrado');
-    if (ticket.creator.id !== user.id) throw new ForbiddenException('No autorizado');
-    if (ticket.status !== 'resuelto') throw new BadRequestException('El ticket no está resuelto');
-    if (ticket.rechazadoPorUsuario) throw new BadRequestException('Ya lo rechazaste');
+    if (ticket.usuarioSolicitante.id !== userId)
+      throw new ForbiddenException('No autorizado');
+    if (ticket.status !== 'resuelto')
+      throw new BadRequestException('El ticket no está resuelto');
+    if (ticket.rechazadoPorUsuario)
+      throw new BadRequestException('Ya lo rechazaste');
 
+    // Marca que el usuario rechazó la resolución
     ticket.rechazadoPorUsuario = true;
     ticket.fechaRechazo = new Date();
 
+    // Cambia el estado para que vuelva a revisión del personal de TI
+    ticket.status = 'en_espera'; // o el nombre que uses en tu enum de estados
+
+    // Opcional: si quieres resetear confirmación por si acaso
+    ticket.confirmadoPorUsuario = false;
+
     return this.ticketRepo.save(ticket);
   }
 
-  async actualizarRechazo(id: number, valor: boolean) {
-    const ticket = await this.ticketRepo.findOneBy({ id });
+
+  async actualizarRechazo(ticketId: number, estado: boolean) {
+    const ticket = await this.ticketRepo.findOne({ where: { id: ticketId } });
 
     if (!ticket) throw new NotFoundException('Ticket no encontrado');
 
-    ticket.rechazadoPorUsuario = valor;
+    ticket.rechazadoPorUsuario = estado;
+
+
     return this.ticketRepo.save(ticket);
   }
-
 
 
 }

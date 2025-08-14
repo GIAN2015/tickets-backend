@@ -34,4 +34,5 @@ export class User {
   @OneToMany(() => Ticket, (ticket) => ticket.assignedTo)
   assignedTickets: Ticket[];
   ticketsCreados: any;
+  histories: any;
 }
