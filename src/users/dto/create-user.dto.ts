@@ -1,5 +1,6 @@
 // create-user.dto.ts
-import { IsEmail, IsEnum, IsNotEmpty } from 'class-validator';
+import { IsEmail, IsEnum, IsInt, IsNotEmpty, IsOptional } from 'class-validator';
+import { Role } from 'src/enums/role.enum';
 
 export class CreateUserDto {
   @IsNotEmpty()
@@ -11,6 +12,11 @@ export class CreateUserDto {
   @IsNotEmpty()
   password: string;
 
-  @IsEnum(['admin', 'user', 'ti'])
-  role: 'admin' | 'user' | 'ti';
+  @IsEnum(Role, { message: 'Role must be admin, user, or ti' })
+  role: Role;
+
+
+  @IsOptional()
+  @IsInt()
+  empresaId?: number;
 }

@@ -20,6 +20,7 @@ export enum Categoria {
 
 @Entity()
 export class Ticket {
+  [x: string]: any;
   @PrimaryGeneratedColumn()
   id: number;
 

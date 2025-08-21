@@ -6,10 +6,12 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { AuthController } from './auth.controller';
+import { EmpresasModule } from 'src/empresas/empresas.module';
 
 @Module({
   imports: [
     UsersModule,
+    EmpresasModule,
     PassportModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'secret_key',

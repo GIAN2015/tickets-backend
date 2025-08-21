@@ -3,6 +3,10 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { User } from './users/entities/user.entity';
+import * as bcrypt from 'bcrypt';
+
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.useStaticAssets(join(__dirname, '..', 'tickets'), {
@@ -11,13 +15,19 @@ async function bootstrap() {
 
   // Habilitar CORS
   app.enableCors({
-    origin: 'http://localhost:3000', // ← el puerto de tu frontend
-    credentials: true,              // ← permite enviar cookies si se usan
+    origin: 'http://localhost:3000',
+    credentials: true,
   });
 
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }));
   app.setGlobalPrefix('api');
 
-  await app.listen(3001); // Puerto de tu backend
+  // 🔹 Seed inicial: crear admin por defecto si no existe
+  const userRepo = app.get(getRepositoryToken(User));
+  const existingAdmin = await userRepo.findOne({ where: { role: 'admin' } });
+
+ 
+
+  await app.listen(3001);
 }
 bootstrap();

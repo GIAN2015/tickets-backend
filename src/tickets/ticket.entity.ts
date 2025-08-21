@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { User } from 'src/users/entities/user.entity';
 import { TicketHistory } from 'src/tickets/entities/tickethistory.entity/tickethistory.entity';
+import { Empresa } from 'src/empresas/entities/empresas.entity';
 export enum Categoria {
   MANTENIMIENTO = 'MANTENIMIENTO',
   HARDWARE = 'HARDWARE',
@@ -52,8 +53,8 @@ export class Ticket {
   @ManyToOne(() => User, (user) => user.assignedTickets, { nullable: true })
   assignedTo?: User;
 
-  @OneToMany(() => Ticket, (ticket) => ticket.creator)
-  ticketsCreados: Ticket[];
+
+
 
   @UpdateDateColumn()
   updatedAt: Date;
@@ -82,9 +83,6 @@ export class Ticket {
   @JoinColumn({ name: 'usuarioSolicitanteId' })
   usuarioSolicitante: User;
 
-
-
-
   @ManyToOne(() => User, user => user.createdTickets)
   @JoinColumn({ name: 'created_by' })
   createdBy: User;
@@ -100,6 +98,9 @@ export class Ticket {
 
   @OneToMany(() => TicketHistory, history => history.ticket)
   histories: TicketHistory[];
+
+  @ManyToOne(() => Empresa, (empresa) => empresa.tickets, { onDelete: 'CASCADE' })
+  empresa: Empresa;
 
   @Column({
     type: 'text', // SQLite no soporta enum nativo

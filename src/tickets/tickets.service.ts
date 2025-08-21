@@ -7,6 +7,9 @@ import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { User } from 'src/users/entities/user.entity';
 import { Categoria } from './ticket.entity';
 import { TicketHistory } from 'src/tickets/entities/tickethistory.entity/tickethistory.entity';
+
+const defaultRelations = ['creator', 'usuarioSolicitante', 'assignedTo'];
+
 @Injectable()
 export class TicketsService {
 
@@ -66,8 +69,12 @@ export class TicketsService {
     });
 
     const saved = await this.ticketRepo.save(ticket);
-    console.log('Ticket guardado:', saved);
-    return saved;
+
+    return this.ticketRepo.findOne({
+      where: { id: saved.id },
+      relations: ['creator', 'usuarioSolicitante'],
+    });
+
   }
 
 
@@ -76,35 +83,25 @@ export class TicketsService {
   async findAll(user: User) {
     console.log('Buscando tickets para rol:', user.role, 'ID:', user.id);
 
-    const relations = ['creator', 'usuarioSolicitante'];
+    const relations = ['creator', 'usuarioSolicitante', 'assignedTo'];
 
     let tickets: Ticket[] = [];
 
-    if (user.role === 'admin') {
+    if (user.role === 'admin' || user.role === 'ti') {
       tickets = await this.ticketRepo.find({ relations });
     } else if (user.role === 'user') {
       tickets = await this.ticketRepo
         .createQueryBuilder('ticket')
         .leftJoinAndSelect('ticket.creator', 'creator')
         .leftJoinAndSelect('ticket.usuarioSolicitante', 'usuarioSolicitante')
+        .leftJoinAndSelect('ticket.assignedTo', 'assignedTo')
         .where('creator.id = :id', { id: user.id })
         .orWhere('usuarioSolicitante.id = :id', { id: user.id })
         .getMany();
-
-    } else if (user.role === 'ti') {
-      tickets = await this.ticketRepo.find({ relations });
     }
-
-    // 👇 DEBUG: revisa que venga confirmadoPorUsuario
-    console.log('Tickets enviados:', tickets.map(t => ({
-      id: t.id,
-      status: t.status,
-      confirmadoPorUsuario: t.confirmadoPorUsuario,
-    })));
 
     return tickets;
   }
-
 
 
 
@@ -157,13 +154,15 @@ export class TicketsService {
   async update(id: number, updateTicketDto: UpdateTicketDto, user: User, archivoNombre?: string) {
     console.log('Usuario que actualiza:', user);
     console.log('DTO recibido:', updateTicketDto);
+    
     const cambios: Partial<TicketHistory> = {};
 
     const ticket = await this.ticketRepo.findOne({
       where: { id },
-      relations: ['createdBy', 'usuarioSolicitante'],
+      relations: ['createdBy', 'usuarioSolicitante', 'creator'],
     });
 
+    
     if (!ticket) {
       console.log('❌ Ticket no encontrado');
       throw new NotFoundException('Ticket no encontrado');
@@ -171,12 +170,11 @@ export class TicketsService {
 
     console.log('Ticket encontrado:', ticket);
 
-
+    console.log('CREATOR:', ticket.creator);
+    console.log('SOLICITANTE:', ticket.usuarioSolicitante);
 
 
     if (user.role === 'user') {
-    
-
       if (!updateTicketDto.message && !archivoNombre) {
         throw new ForbiddenException('Solo puedes agregar un mensaje o adjuntar un archivo');
       }
@@ -221,6 +219,7 @@ export class TicketsService {
         statusAnterior: cambios.statusAnterior,
         statusNuevo: cambios.statusNuevo,
         mensaje: updateTicketDto.message,
+        actualizadoPor: { id: user.id },
         adjuntoNombre: archivoNombre,
 
       });
@@ -240,11 +239,23 @@ export class TicketsService {
 
   }
   async obtenerHistorial(ticketId: number) {
-    return this.historyRepo.find({
+    const historial = await this.historyRepo.find({
       where: { ticket: { id: ticketId } },
       relations: ['ticket', 'actualizadoPor'],
       order: { fecha: 'DESC' },
     });
+
+    return historial.map((h) => ({
+      id: h.id,
+      fecha: h.fecha,
+      email: h.actualizadoPor?.email ?? null, // 👈 devuelve solo email
+      statusAnterior: h.statusAnterior,
+      statusNuevo: h.statusNuevo,
+      prioridadAnterior: h.prioridadAnterior,
+      prioridadNueva: h.prioridadNueva,
+      mensaje: h.mensaje,
+      adjuntoNombre: h.adjuntoNombre,
+    }));
   }
 
 
@@ -337,4 +348,3 @@ export class TicketsService {
 
 
 }
-

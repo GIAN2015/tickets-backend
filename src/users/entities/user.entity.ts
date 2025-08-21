@@ -1,5 +1,6 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany, ManyToOne, JoinColumn } from 'typeorm';
 import { Ticket } from 'src/tickets/ticket.entity';
+import { Empresa } from 'src/empresas/entities/empresas.entity';
 
 @Entity()
 export class User {
@@ -18,13 +19,17 @@ export class User {
   @Column()
   role: 'admin' | 'user' | 'ti';
 
-   @OneToMany(() => Ticket, (ticket) => ticket.creator)
+  @OneToMany(() => Ticket, (ticket) => ticket.creator)
   createdTickets: Ticket[];
 
   @OneToMany(() => Ticket, (ticket) => ticket.assignedTo)
   assignedTickets: Ticket[];
-  // user.entity.ts
-@OneToMany(() => Ticket, (ticket) => ticket.usuarioSolicitante)
-ticketsAsignados: Ticket[];
 
+  @OneToMany(() => Ticket, (ticket) => ticket.usuarioSolicitante)
+  ticketsAsignados: Ticket[];
+
+  // 🔹 Relación con empresa
+  @ManyToOne(() => Empresa, (empresa) => empresa.users, { eager: true })
+  @JoinColumn({ name: 'empresaId' })
+  empresa: Empresa;
 }

@@ -1,6 +1,14 @@
 // src/users/entities/user.entity.ts
-import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
-import { Ticket } from 'src/tickets/ticket.entity';
+import {
+  Column,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  OneToMany,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
+import { Ticket } from 'src/tickets/entities/ticket.entity';
+import { Empresa } from 'src/empresas/entities/empresas.entity';
 
 export enum UserRole {
   ADMIN = 'admin',
@@ -22,17 +30,25 @@ export class User {
   @Column()
   password: string;
 
-  @Column({ type: 'text' }) // SQLite no soporta ENUM
+  // como SQLite no soporta ENUM nativo, usamos text
+  @Column({ type: 'text', default: UserRole.USER })
   role: UserRole;
-  @ManyToOne(() => User, (user) => user.ticketsCreados)
-  @JoinColumn({ name: 'created_by' }) // si tu columna es created_by
-  createdBy: User;
 
+  // 🔗 Relación con Empresa
+  @ManyToOne(() => Empresa, (empresa) => empresa.users, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'empresaId' })
+  empresa: Empresa;
+
+  @Column({nullable:true})
+  empresaId: number; // 👈 clave foránea para identificar la empresa
+
+  // 🔗 Relación con Tickets creados
   @OneToMany(() => Ticket, (ticket) => ticket.creator)
   createdTickets: Ticket[];
 
+  // 🔗 Relación con Tickets asignados
   @OneToMany(() => Ticket, (ticket) => ticket.assignedTo)
   assignedTickets: Ticket[];
-  ticketsCreados: any;
+
   histories: any;
 }

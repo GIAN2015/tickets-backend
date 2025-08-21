@@ -1,6 +1,10 @@
 // ticket-history.entity.ts
 import {
-  Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  ManyToOne,
 } from 'typeorm';
 import { Ticket } from 'src/tickets/ticket.entity';
 import { User } from 'src/users/user.entity';
@@ -13,8 +17,10 @@ export class TicketHistory {
   @ManyToOne(() => Ticket, ticket => ticket.histories)
   ticket: Ticket;
 
-  @ManyToOne(() => User, (user) => user.histories, { eager: false })
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+  @ManyToOne(() => User, (user) => user.histories)
   actualizadoPor: User;
+
 
   @Column({ nullable: true })
   statusAnterior?: string;
@@ -33,7 +39,9 @@ export class TicketHistory {
   @Column({ type: 'text', nullable: true })
   mensaje?: string;
 
-  @Column({nullable: true})
-  adjuntoNombre?: string;  
+
+
+  @Column({ nullable: true })
+  adjuntoNombre?: string;
 
 }
