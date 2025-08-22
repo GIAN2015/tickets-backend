@@ -6,12 +6,14 @@ import { EmpresasService } from 'src/empresas/empresas.service';
 import { RegisterEmpresaDto } from 'src/empresas/dto/create-empresa.dto';
 import { Role } from 'src/enums/role.enum';
 
+
 @Injectable()
 export class AuthService {
   constructor(
     private usersService: UsersService,
     private readonly empresasService: EmpresasService,
     private jwtService: JwtService,
+
   ) { }
 
   // Registrar empresa + admin
@@ -25,31 +27,30 @@ export class AuthService {
       correoContacto: dto.correoContacto,
       adminNombre: dto.adminNombre,
       adminEmail: dto.adminEmail,
-      adminPassword: dto.adminPassword,
-    });
+      adminPassword: dto.adminPassword, // se pasa plano
+    }
+    );
 
-    // 2. Hashear password del admin
-    const hashedPassword = await bcrypt.hash(dto.adminPassword, 10);
-
-    // 3. Crear admin asociado a la empresa
+    // 2. Crear admin asociado a la empresa
     const admin = await this.usersService.create(
       {
         username: dto.adminNombre,
         email: dto.adminEmail,
-        password: hashedPassword,
+        password: dto.adminPassword, // se pasa plano (lo hashea UsersService)
         role: Role.ADMIN,
+      
       },
-      {
-        ...empresa.empresa, // 👈 le pasamos la empresa creada
-      } as any,
+      empresa
     );
-
+    
     return {
+
       message: 'Empresa y admin creados correctamente',
       empresa,
       admin,
     };
   }
+
 
   // Login
   async login(dto: { username: string; password: string }) {
@@ -69,8 +70,16 @@ export class AuthService {
       sub: user.id,
       username: user.username,
       role: user.role,
-      empresaId: user.empresa, // 👈 también loguea esto si quieres
+      empresaId: user.empresa?.id,  // 👈 también loguea esto si quieres
     };
+    if (!user.password.startsWith("$2b$")) {
+      // significa que no está hasheada
+      const hashed = await bcrypt.hash(user.password, 10);
+      user.password = hashed;
+      await this.usersService.updatePassword(user.id, hashed);
+      console.log("👉 Password de usuario migrada a hash automáticamente");
+    }
+
 
     console.log("👉 Payload JWT:", payload);
 

@@ -1,45 +1,53 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
-import { Role } from 'src/enums/role.enum'; // importa tu enum
+import { Empresa } from 'src/empresas/entities/empresas.entity';
 import * as bcrypt from 'bcrypt';
-
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+
+    @InjectRepository(Empresa) // <-- aquí inyectas Empresa
+    private readonly empresaRepository: Repository<Empresa>,
   ) { }
 
   async findAll(): Promise<User[]> {
-    return this.userRepository.find();
+    return this.userRepository.find({ relations: ['empresa'] }); // trae con empresa
   }
 
-  async create(createUserDto: CreateUserDto, currentUser?: User) {
-    // Hashear la contraseña antes de guardar
-    const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
+  async create(createUserDto: CreateUserDto, admin: any | null) {
+    const saltOrRounds = 10;
+    const hashedPassword = await bcrypt.hash(createUserDto.password, saltOrRounds);
+    const empresa = await this.empresaRepository.findOne({
+      where: { id: admin.empresaId },
+    });
+
+    if (!empresa) {
+      throw new NotFoundException('Empresa no encontrada');
+    }
 
     const user = this.userRepository.create({
       ...createUserDto,
       password: hashedPassword,
-      // Si el que crea el usuario es un admin/usuario logueado, se asigna su empresa.
-      // Si es un registro sin sesión (primer usuario, público), se ignora.
-      empresa: currentUser ? currentUser.empresa : undefined,
-    });
+      empresa, });
 
     return this.userRepository.save(user);
   }
 
-
+  async updatePassword(id: number, newHashedPassword: string) {
+    await this.userRepository.update(id, { password: newHashedPassword });
+  }
 
   async findByUsername(username: string): Promise<User | null> {
-    return this.userRepository.findOne({ where: { username } });
+    return this.userRepository.findOne({ where: { username },relations: ['empresa'] });
   }
 
   async findById(id: number): Promise<User | null> {
-    return this.userRepository.findOne({ where: { id } });
+    return this.userRepository.findOne({ where: { id }, relations: ['empresa'] });
   }
 
   async delete(id: number) {

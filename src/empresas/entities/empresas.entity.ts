@@ -26,8 +26,10 @@ export class Empresa {
   @OneToMany(() => Ticket, (ticket) => ticket.empresa)
   tickets: Ticket[];
 
+  @OneToOne(() => User, { nullable: true })
   @JoinColumn()
   admin: User;
+
   @OneToMany(() => User, (user) => user.empresa)
   users: User[];
 

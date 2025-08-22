@@ -29,7 +29,7 @@ export class User {
   ticketsAsignados: Ticket[];
 
   // 🔹 Relación con empresa
-  @ManyToOne(() => Empresa, (empresa) => empresa.users, { eager: true })
-  @JoinColumn({ name: 'empresaId' })
-  empresa: Empresa;
+  @ManyToOne(() => Empresa, (empresa) => empresa.users, { nullable: true })
+  empresa?: Empresa;
+
 }

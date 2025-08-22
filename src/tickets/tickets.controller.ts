@@ -32,6 +32,7 @@ import { v4 as uuidv4 } from 'uuid';
 import * as path from 'path';
 import { extname } from 'path';
 import { MulterField } from '@nestjs/platform-express/multer/interfaces/multer-options.interface';
+import { JwtPayload } from 'src/auth/types/jwt-payload.interface';
 
 @UseGuards(JwtAuthGuard)
 @Controller('tickets')
@@ -87,10 +88,18 @@ export class TicketsController {
   // tickets.controller.ts
   @Get()
   async getAll(@Req() req: RequestWithUser) {
-    console.log('User que solicita tickets:', req.user);
-    const user = req.user as User;
-    return this.ticketsService.findAll(user);
+    const user = req.user as JwtPayload;
+    console.log('User que solicita tickets:', user);
+
+    return this.ticketsService.findAll({
+      id: user.id,
+      role: user.role,
+      empresaId: user.empresaId,
+    });
   }
+
+
+
 
   @Get()
   async findAll(@Req() req: RequestWithUser) {

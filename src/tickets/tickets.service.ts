@@ -80,28 +80,48 @@ export class TicketsService {
 
 
   // tickets.service.ts
-  async findAll(user: User) {
-    console.log('Buscando tickets para rol:', user.role, 'ID:', user.id);
+  // tickets.service.ts
+  async findAll(user: { id: number; role: string; empresaId?: number }) {
+    console.log(
+      'Buscando tickets para rol:',
+      user.role,
+      'ID:',
+      user.id,
+      'Empresa:',
+      user.empresaId,
+    );
 
     const relations = ['creator', 'usuarioSolicitante', 'assignedTo'];
 
     let tickets: Ticket[] = [];
 
     if (user.role === 'admin' || user.role === 'ti') {
-      tickets = await this.ticketRepo.find({ relations });
+      // Admin y TI ven todos los tickets de su empresa
+      tickets = await this.ticketRepo.find({
+        where: { empresa: { id: user.empresaId} },
+        relations,
+      });
+
     } else if (user.role === 'user') {
+      // Los usuarios solo ven tickets donde son creator o usuarioSolicitante
       tickets = await this.ticketRepo
         .createQueryBuilder('ticket')
         .leftJoinAndSelect('ticket.creator', 'creator')
         .leftJoinAndSelect('ticket.usuarioSolicitante', 'usuarioSolicitante')
         .leftJoinAndSelect('ticket.assignedTo', 'assignedTo')
-        .where('creator.id = :id', { id: user.id })
-        .orWhere('usuarioSolicitante.id = :id', { id: user.id })
+        .where('ticket.empresaId = :empresaId', { empresaId: user.empresaId })
+        .andWhere(
+          '(creator.id = :id OR usuarioSolicitante.id = :id)',
+          { id: user.id },
+        )
         .getMany();
     }
 
     return tickets;
   }
+
+
+
 
 
 
@@ -154,7 +174,7 @@ export class TicketsService {
   async update(id: number, updateTicketDto: UpdateTicketDto, user: User, archivoNombre?: string) {
     console.log('Usuario que actualiza:', user);
     console.log('DTO recibido:', updateTicketDto);
-    
+
     const cambios: Partial<TicketHistory> = {};
 
     const ticket = await this.ticketRepo.findOne({
@@ -162,7 +182,7 @@ export class TicketsService {
       relations: ['createdBy', 'usuarioSolicitante', 'creator'],
     });
 
-    
+
     if (!ticket) {
       console.log('❌ Ticket no encontrado');
       throw new NotFoundException('Ticket no encontrado');
