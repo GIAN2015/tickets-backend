@@ -19,21 +19,17 @@ export class UsersService {
     return this.userRepository.find({ relations: ['empresa'] }); // trae con empresa
   }
 
-  async create(createUserDto: CreateUserDto, admin: any | null) {
+  async create(createUserDto: CreateUserDto, empresa: Empresa) {
     const saltOrRounds = 10;
     const hashedPassword = await bcrypt.hash(createUserDto.password, saltOrRounds);
-    const empresa = await this.empresaRepository.findOne({
-      where: { id: admin.empresaId },
-    });
+    ;
 
-    if (!empresa) {
-      throw new NotFoundException('Empresa no encontrada');
-    }
 
     const user = this.userRepository.create({
       ...createUserDto,
       password: hashedPassword,
-      empresa, });
+      empresa,
+    });
 
     return this.userRepository.save(user);
   }
@@ -41,9 +37,15 @@ export class UsersService {
   async updatePassword(id: number, newHashedPassword: string) {
     await this.userRepository.update(id, { password: newHashedPassword });
   }
+  async findByEmail(email: string) {
+    return this.userRepository.findOne({
+      where: { email },
+      relations: ['empresa'],
+    });
+  }
 
   async findByUsername(username: string): Promise<User | null> {
-    return this.userRepository.findOne({ where: { username },relations: ['empresa'] });
+    return this.userRepository.findOne({ where: { username }, relations: ['empresa'] });
   }
 
   async findById(id: number): Promise<User | null> {

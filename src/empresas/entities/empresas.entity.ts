@@ -9,6 +9,8 @@ export class Empresa {
   id: number;
 
   @Column()
+
+  @Column()
   razonSocial: string;
 
   @Column()

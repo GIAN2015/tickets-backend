@@ -3,6 +3,9 @@ import { IsEmail, IsNotEmpty, Length, IsOptional } from 'class-validator';
 export class RegisterEmpresaDto {
   @IsNotEmpty()
   razonSocial: string;
+  @IsNotEmpty()
+ 
+
 
   @IsNotEmpty()
   @Length(7, 15)

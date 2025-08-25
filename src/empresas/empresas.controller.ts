@@ -16,10 +16,7 @@ export class EmpresasController {
     return this.empresasService.create(createEmpresaDto);
   }
 
-  @Get()
-  findAll() {
-    return this.empresasService.findAll();
-  }
+
 
   @Get(':id')
   findOne(@Param('id') id: number) {
