@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Not, Repository } from 'typeorm';
 import { Ticket } from 'src/tickets/ticket.entity';
 import { UsersService } from 'src/users/users.service';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
@@ -27,7 +27,7 @@ export class TicketsService {
   ) { }
 
   async create(ticketDto: {
-    archivoNombre: string | undefined;
+    archivoNombre?: string; // 👈 ahora array
     title: string;
     description: string;
     creatorId: number;
@@ -66,13 +66,14 @@ export class TicketsService {
       tipo: ticketDto.tipo ?? 'incidencia',
       usuarioSolicitante: usuarioSolicitante,
       archivoNombre: ticketDto.archivoNombre,
+      empresa: creator.empresa
     });
 
     const saved = await this.ticketRepo.save(ticket);
 
     return this.ticketRepo.findOne({
       where: { id: saved.id },
-      relations: ['creator', 'usuarioSolicitante'],
+      relations: ['creator', 'usuarioSolicitante', 'empresa'],
     });
 
   }
@@ -98,7 +99,7 @@ export class TicketsService {
     if (user.role === 'admin' || user.role === 'ti') {
       // Admin y TI ven todos los tickets de su empresa
       tickets = await this.ticketRepo.find({
-        where: { empresa: { id: user.empresaId} },
+        where: { empresa: { id: user.empresaId } },
         relations,
       });
 
@@ -147,7 +148,7 @@ export class TicketsService {
   async findOne(id: number) {
     const ticket = await this.ticketRepo.findOne({
       where: { id },
-      relations: ['creator', 'usuarioSolicitante'],
+      relations: ['creator', 'usuarioSolicitante', 'empresa'],
     });
 
     // No se debe crear un registro de historial al consultar un ticket
@@ -201,9 +202,6 @@ export class TicketsService {
     }
 
 
-    if (archivoNombre) {
-      ticket.archivoNombre = archivoNombre;
-    }
 
     if (updateTicketDto.message) {
       ticket.message = updateTicketDto.message;
@@ -227,6 +225,16 @@ export class TicketsService {
         console.log('✅ TI actualiza prioridad a:', updateTicketDto.prioridad);
       }
 
+    } if (archivoNombre) {
+      const adjuntosExistentes = await this.historyRepo.count({
+        where: { ticket: { id: ticket.id }, adjuntoNombre: Not(IsNull()) },
+      });
+
+      if (adjuntosExistentes >= 3) {
+        throw new BadRequestException('Máximo 3 archivos adjuntos permitidos');
+      }
+
+      cambios.adjuntoNombre = archivoNombre;
     }
 
     if (Object.keys(cambios).length > 0 ||

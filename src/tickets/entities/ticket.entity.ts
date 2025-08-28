@@ -89,7 +89,7 @@ export class Ticket {
   createdBy: User;
 
   @Column({ nullable: true })
-  archivoNombre: string;
+  archivoNombre?: string;
 
   @Column({ nullable: true })
   message: string;

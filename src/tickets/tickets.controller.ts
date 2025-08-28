@@ -26,7 +26,7 @@ import { Repository } from 'typeorm';
 import { User } from 'src/users/entities/user.entity';
 import { request } from 'http';
 import { Categoria } from './ticket.entity';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { v4 as uuidv4 } from 'uuid';
 import * as path from 'path';
@@ -124,34 +124,46 @@ export class TicketsController {
 
 
   @Patch(':id')
-  @UseInterceptors(FileInterceptor('archivo', {
+  @UseInterceptors(FilesInterceptor('archivos', 3, {
     storage: diskStorage({
-      destination: './tickets',
+      destination: './uploads/tickets',
       filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-        const ext = path.extname(file.originalname);
-        cb(null, uniqueSuffix + ext);
-      }
-    })
+        const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        cb(null, unique + '-' + file.originalname);
+      },
+    }),
   }))
   async update(
-    @Param('id') id: number,
-    @UploadedFile() archivo: Express.Multer.File,
-    @Body() updateTicketDto: UpdateTicketDto,
-    @Req() req: RequestWithUser,
+    id: number,
+    updateTicketDto: UpdateTicketDto,
+    user: User,
+    archivo?: string,
   ) {
-    const user = await this.usersRepo.findOne({ where: { id: req.user.id } });
+    const ticket = await this.ticketRepository.findOne({
+      where: { id },
+      relations: ['empresa', 'creator', 'assignedTo'], // 👈 incluye las relaciones que necesitas
+    });
 
-
-    if (!user) {
-      throw new NotFoundException('Usuario no encontrado');
+    if (!ticket) {
+      throw new NotFoundException('Ticket no encontrado');
     }
 
+    // Actualizamos los campos
+    Object.assign(ticket, updateTicketDto);
 
+    if (archivo) {
+      ticket.archivo = archivo; // o como se llame tu campo
+    }
 
-    return this.ticketsService.update(+id, updateTicketDto, user, archivo?.filename);
+    ticket.updatedBy = user; // si manejas auditoría
 
+    const updated = await this.ticketRepository.save(ticket);
 
+    // 👈 devuelve el ticket actualizado con sus relaciones
+    return await this.ticketRepository.findOne({
+      where: { id: updated.id },
+      relations: ['empresa', 'creator', 'assignedTo'],
+    });
   }
 
   @Get(':id/historial')

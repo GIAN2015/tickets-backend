@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
@@ -25,6 +25,7 @@ export class UsersService {
     ;
 
 
+
     const user = this.userRepository.create({
       ...createUserDto,
       password: hashedPassword,
@@ -37,12 +38,14 @@ export class UsersService {
   async updatePassword(id: number, newHashedPassword: string) {
     await this.userRepository.update(id, { password: newHashedPassword });
   }
-  async findByEmail(email: string) {
+  async findByEmail(email: string, options?: { relations?: string[] }): Promise<User | null> {
     return this.userRepository.findOne({
       where: { email },
-      relations: ['empresa'],
+      relations: options?.relations || [],
     });
   }
+
+
 
   async findByUsername(username: string): Promise<User | null> {
     return this.userRepository.findOne({ where: { username }, relations: ['empresa'] });

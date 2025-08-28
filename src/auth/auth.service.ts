@@ -7,6 +7,7 @@ import { RegisterEmpresaDto } from 'src/empresas/dto/create-empresa.dto';
 import { Role } from 'src/enums/role.enum';
 import { JwtService } from '@nestjs/jwt';
 
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -43,7 +44,7 @@ export class AuthService {
     return {
       message: 'Empresa y administrador creados correctamente',
       empresa,
-      admin: { id: admin.id, username: admin.username, email: admin.email },
+      admin: { id: admin.id, username: admin.username, email: admin.email, empresa: empresa?.id },
     };
 
 
@@ -52,9 +53,8 @@ export class AuthService {
   async login(dto: { email: string; password: string }) {
     console.log('DTO recibido:', dto);
 
-    const user = await this.usersService.findByEmail(dto.email);
+    const user = await this.usersService.findByEmail(dto.email, { relations: ['empresa'] }); // 👈 asegúrate de traer empresa
     console.log('Usuario encontrado:', user);
-
     if (!user) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
@@ -64,7 +64,7 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    const payload = { sub: user.id, email: user.email, role: user.role };
+    const payload = { sub: user.id, username: user.username, email: user.email, role: user.role, empresaId: user.empresa?.id };
     const token = await this.jwtService.signAsync(payload);
     console.log('DTO Password:', dto.password);
     console.log('User Password Hash:', user.password);
@@ -78,6 +78,7 @@ export class AuthService {
         username: user.username,
         email: user.email,
         role: user.role,
+        empresaId: user.empresa?.id,
 
       },
     };

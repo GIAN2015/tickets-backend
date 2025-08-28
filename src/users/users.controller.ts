@@ -1,10 +1,12 @@
-import { Controller, Post, Body, Get, Delete, Param, ParseIntPipe, UseGuards, Req, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Body, Get, Delete, Param, ParseIntPipe, UseGuards, Req, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RequestWithUser } from 'src/common/interfaces/request-with-user.interface';
 
 import { EmpresasService } from 'src/empresas/empresas.service';
+
+
 @Controller('users')
 export class UsersController {
 
@@ -14,6 +16,9 @@ export class UsersController {
   @Post()
   async create(@Body() createUserDto: CreateUserDto, @Req() req: RequestWithUser) {
     const admin = req.user;
+    if (admin.role !== 'admin') {
+      throw new ForbiddenException('Solo un administrador puede crear usuarios');
+    }
 
     if (!admin.empresaId) {
       throw new BadRequestException('El usuario no tiene empresa asociada');
@@ -41,8 +46,9 @@ export class UsersController {
   }
 
   // src/users/users.controller.ts
+  @UseGuards(JwtAuthGuard)
   @Get('empresa')
-  async getEmpresa(@Req() req) {
+  async getEmpresa(@Req() req: RequestWithUser) {
     const admin = req.user;
 
     if (!admin.empresaId) {
