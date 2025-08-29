@@ -13,6 +13,7 @@ import {
   UseInterceptors,
   UploadedFile,
   Res,
+  UploadedFiles,
 } from '@nestjs/common';
 import { Response } from 'express';
 import * as fs from 'fs';
@@ -33,16 +34,21 @@ import * as path from 'path';
 import { extname } from 'path';
 import { MulterField } from '@nestjs/platform-express/multer/interfaces/multer-options.interface';
 import { JwtPayload } from 'src/auth/types/jwt-payload.interface';
+import { Ticket } from './entities/ticket.entity';
 
 @UseGuards(JwtAuthGuard)
 @Controller('tickets')
 export class TicketsController {
   ticketsRepo: any;
-  ticketRepository: any;
+  historyRepository: any;
+
   constructor(
     private readonly ticketsService: TicketsService,
     @InjectRepository(TicketHistory)
     private readonly historyRepo: Repository<TicketHistory>,
+
+    @InjectRepository(Ticket)
+    private readonly ticketRepository: Repository<Ticket>,
     @InjectRepository(User)
     private readonly usersRepo: Repository<User>,
   ) { }
@@ -124,47 +130,41 @@ export class TicketsController {
 
 
   @Patch(':id')
-  @UseInterceptors(FilesInterceptor('archivos', 3, {
-    storage: diskStorage({
-      destination: './uploads/tickets',
-      filename: (req, file, cb) => {
-        const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
-        cb(null, unique + '-' + file.originalname);
-      },
+  @UseInterceptors(
+    FilesInterceptor('archivos', 3, {
+      storage: diskStorage({
+        destination: './tickets',
+        filename: (req, file, cb) => {
+          const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          cb(null, unique + '-' + file.originalname);
+        },
+      }),
     }),
-  }))
+  )
   async update(
-    id: number,
-    updateTicketDto: UpdateTicketDto,
-    user: User,
-    archivo?: string,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateTicketDto: UpdateTicketDto,
+    @Req() req: RequestWithUser,
+    @UploadedFiles() archivos?: Express.Multer.File[],
   ) {
-    const ticket = await this.ticketRepository.findOne({
-      where: { id },
-      relations: ['empresa', 'creator', 'assignedTo'], // 👈 incluye las relaciones que necesitas
-    });
+    const archivoNombre = archivos?.[0]?.filename;
+    const updated = await this.ticketsService.update(
+      id,
+      updateTicketDto,
+      req.user as any,      // <- el service necesita el usuario para 'actualizadoPor'
+      archivoNombre,
+    );
 
-    if (!ticket) {
-      throw new NotFoundException('Ticket no encontrado');
-    }
-
-    // Actualizamos los campos
-    Object.assign(ticket, updateTicketDto);
-
-    if (archivo) {
-      ticket.archivo = archivo; // o como se llame tu campo
-    }
-
-    ticket.updatedBy = user; // si manejas auditoría
-
-    const updated = await this.ticketRepository.save(ticket);
-
-    // 👈 devuelve el ticket actualizado con sus relaciones
-    return await this.ticketRepository.findOne({
+    // Si necesitas devolver con relaciones:
+    return this.ticketRepository.findOne({
       where: { id: updated.id },
-      relations: ['empresa', 'creator', 'assignedTo'],
+      relations: ['empresa', 'creator', 'assignedTo', 'histories'], // ojo: 'histories'
     });
   }
+
+
+
+
 
   @Get(':id/historial')
   async getHistorial(@Param('id', ParseIntPipe) id: number) {

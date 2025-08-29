@@ -20,6 +20,7 @@ export class TicketsService {
     @InjectRepository(User)
     private userRepo: Repository<User>,
 
+
     @InjectRepository(TicketHistory)
     private historyRepo: Repository<TicketHistory>, // <-- ¡AGREGA ESTA LÍNEA!
 
@@ -73,7 +74,12 @@ export class TicketsService {
 
     return this.ticketRepo.findOne({
       where: { id: saved.id },
-      relations: ['creator', 'usuarioSolicitante', 'empresa'],
+      relations: ['creator',
+        'usuarioSolicitante',
+        'assignedTo',
+        'empresa',
+        'histories', // 👈 ojo: en tu entity Ticket el campo es histories
+        'histories.actualizadoPor',],
     });
 
   }
@@ -110,6 +116,8 @@ export class TicketsService {
         .leftJoinAndSelect('ticket.creator', 'creator')
         .leftJoinAndSelect('ticket.usuarioSolicitante', 'usuarioSolicitante')
         .leftJoinAndSelect('ticket.assignedTo', 'assignedTo')
+        .leftJoinAndSelect('ticket.histories', 'histories')
+        .leftJoinAndSelect('histories.actualizadoPor', 'actualizadoPor')
         .where('ticket.empresaId = :empresaId', { empresaId: user.empresaId })
         .andWhere(
           '(creator.id = :id OR usuarioSolicitante.id = :id)',
@@ -150,6 +158,9 @@ export class TicketsService {
       where: { id },
       relations: ['creator', 'usuarioSolicitante', 'empresa'],
     });
+    if (!ticket) {
+      throw new NotFoundException(`Ticket con id ${id} no encontrado`);
+    }
 
     // No se debe crear un registro de historial al consultar un ticket
     return ticket;
@@ -247,8 +258,9 @@ export class TicketsService {
         statusAnterior: cambios.statusAnterior,
         statusNuevo: cambios.statusNuevo,
         mensaje: updateTicketDto.message,
-        actualizadoPor: { id: user.id },
+        actualizadoPor: { id: user.id } as any,
         adjuntoNombre: archivoNombre,
+
 
       });
       await this.historyRepo.save(historial)

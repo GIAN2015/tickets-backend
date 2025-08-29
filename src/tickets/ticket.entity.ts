@@ -107,5 +107,6 @@ export class Ticket {
     default: Categoria.OTROS,
   })
   categoria: Categoria;
+  updateBy: { empresaId: number | undefined; id: number; username: string; role: "admin" | "user" | "ti"; };
 
 }
