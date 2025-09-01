@@ -88,8 +88,8 @@ export class Ticket {
   @JoinColumn({ name: 'created_by' })
   createdBy: User;
 
-  @Column({ nullable: true })
-  archivoNombre?: string;
+  @Column('simple-json', { nullable: true })
+  archivoNombre?: string[];
 
   @Column({ nullable: true })
   message: string;

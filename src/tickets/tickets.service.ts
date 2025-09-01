@@ -28,7 +28,7 @@ export class TicketsService {
   ) { }
 
   async create(ticketDto: {
-    archivoNombre?: string; // 👈 ahora array
+    archivoNombre?: string[]; // 👈 ahora array
     title: string;
     description: string;
     creatorId: number;
@@ -66,7 +66,7 @@ export class TicketsService {
       creator: creator,
       tipo: ticketDto.tipo ?? 'incidencia',
       usuarioSolicitante: usuarioSolicitante,
-      archivoNombre: ticketDto.archivoNombre,
+      archivoNombre: ticketDto.archivoNombre ?? [],
       empresa: creator.empresa
     });
 
@@ -183,7 +183,7 @@ export class TicketsService {
 
 
 
-  async update(id: number, updateTicketDto: UpdateTicketDto, user: User, archivoNombre?: string) {
+  async update(id: number, updateTicketDto: UpdateTicketDto, user: User, archivoNombres?: string[]) {
     console.log('Usuario que actualiza:', user);
     console.log('DTO recibido:', updateTicketDto);
 
@@ -207,7 +207,7 @@ export class TicketsService {
 
 
     if (user.role === 'user') {
-      if (!updateTicketDto.message && !archivoNombre) {
+      if (!updateTicketDto.message && !archivoNombres) {
         throw new ForbiddenException('Solo puedes agregar un mensaje o adjuntar un archivo');
       }
     }
@@ -236,7 +236,7 @@ export class TicketsService {
         console.log('✅ TI actualiza prioridad a:', updateTicketDto.prioridad);
       }
 
-    } if (archivoNombre) {
+    } if (archivoNombres) {
       const adjuntosExistentes = await this.historyRepo.count({
         where: { ticket: { id: ticket.id }, adjuntoNombre: Not(IsNull()) },
       });
@@ -245,12 +245,12 @@ export class TicketsService {
         throw new BadRequestException('Máximo 3 archivos adjuntos permitidos');
       }
 
-      cambios.adjuntoNombre = archivoNombre;
+      cambios.adjuntoNombre = archivoNombres;
     }
 
     if (Object.keys(cambios).length > 0 ||
       updateTicketDto.message ||
-      archivoNombre) {
+      archivoNombres) {
       const historial = this.historyRepo.create({
         ticket,
         prioridadAnterior: cambios.prioridadAnterior,
@@ -259,7 +259,7 @@ export class TicketsService {
         statusNuevo: cambios.statusNuevo,
         mensaje: updateTicketDto.message,
         actualizadoPor: { id: user.id } as any,
-        adjuntoNombre: archivoNombre,
+        adjuntoNombre: archivoNombres && archivoNombres.length > 0 ? archivoNombres : [],
 
 
       });
@@ -267,10 +267,7 @@ export class TicketsService {
         ;
       console.log('📜 Historial guardado:', historial);
     }
-    if (archivoNombre) {
-      ticket.archivoNombre = archivoNombre; // Asegúrate de que este campo exista en la entidad Ticket
-    }
-
+ 
 
     return this.ticketRepo.save(ticket);
 

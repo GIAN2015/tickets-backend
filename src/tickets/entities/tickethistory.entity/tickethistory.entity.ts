@@ -41,7 +41,7 @@ export class TicketHistory {
 
 
 
-  @Column({ nullable: true })
-  adjuntoNombre?: string;
+  @Column('simple-json', { nullable: true })
+  adjuntoNombre?: string[];
 
 }

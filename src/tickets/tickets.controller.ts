@@ -54,7 +54,7 @@ export class TicketsController {
   ) { }
 
   @Post()
-  @UseInterceptors(FileInterceptor('archivo', {
+  @UseInterceptors(FilesInterceptor('archivos', 3, {
     storage: diskStorage({
       destination: './tickets',
       filename: (req, file, callback) => {
@@ -71,21 +71,22 @@ export class TicketsController {
       usuarioSolicitanteId?: number;
       prioridad?: 'muy_bajo' | 'bajo' | 'media' | 'alta' | 'muy_alta';
       tipo?: 'requerimiento' | 'incidencia' | 'consulta';
-      archivoNombre?: string; // Nombre del archivo subido
+      archivoNombre?: string[];
+
     },
 
     @Req() req: RequestWithUser,
-    @UploadedFile() archivo?: Express.Multer.File,
+    @UploadedFiles() archivos?: Express.Multer.File[],
 
   ) {
     console.log('Body recibido:', dto);
-    console.log('Archivo recibido:', archivo);
+    console.log('Archivo recibido:', archivos);
 
     return this.ticketsService.create({
       ...dto,
       creatorId: req.user.id,
       categoria: dto.categoria ? Categoria[dto.categoria.toUpperCase()] : undefined,
-      archivoNombre: archivo?.filename,
+      archivoNombre: archivos?.map(a => a.filename) ?? [],
 
     });
 
@@ -147,12 +148,12 @@ export class TicketsController {
     @Req() req: RequestWithUser,
     @UploadedFiles() archivos?: Express.Multer.File[],
   ) {
-    const archivoNombre = archivos?.[0]?.filename;
+    const archivoNombres = archivos?.map((file) => file.filename) ?? [];
     const updated = await this.ticketsService.update(
       id,
       updateTicketDto,
       req.user as any,      // <- el service necesita el usuario para 'actualizadoPor'
-      archivoNombre,
+      archivoNombres,
     );
 
     // Si necesitas devolver con relaciones:
@@ -224,12 +225,20 @@ export class TicketsController {
   }
 
   @Get(':archivoNombre')
-  async verArchivo(@Param('archivoNombre') archivoNombre: string, @Res() res: Response) {
-    const filePath = path.join(__dirname, '..', '..', 'uploads', archivoNombre); // Ajusta esta ruta si tu carpeta "uploads" está en otra ubicación
+  async verArchivo(
+    @Param('archivoNombre') archivoNombre: string,
+    @Res() res: Response
+  ) {
+    // 👇 decodificar el nombre (convierte %20 en espacio real)
+    const decodedName = decodeURIComponent(archivoNombre);
+
+    const filePath = path.join(__dirname, '..', '..', 'tickets', decodedName);
+
     if (fs.existsSync(filePath)) {
-      res.sendFile(filePath);
+      return res.sendFile(filePath);
     } else {
-      res.status(404).json({ message: 'Archivo no encontrado' });
+      return res.status(404).json({ message: 'Archivo no encontrado' });
     }
   }
+
 }
