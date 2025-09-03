@@ -59,5 +59,20 @@ export class UsersController {
     return empresa;
   }
 
+  // src/users/users.controller.ts
+  @UseGuards(JwtAuthGuard)
+  @Get('by-empresa')
+  async findByEmpresa(@Req() req: RequestWithUser) {
+    const user = req.user;
+
+    if (!user.empresaId) {
+      throw new BadRequestException('El usuario no tiene empresa asociada');
+    }
+
+    // ✅ Devuelve SOLO los usuarios de esa empresa
+    return this.usersService.findByEmpresa(user.empresaId);
+  }
+
+
 
 }

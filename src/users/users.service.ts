@@ -7,6 +7,14 @@ import { Empresa } from 'src/empresas/entities/empresas.entity';
 import * as bcrypt from 'bcrypt';
 @Injectable()
 export class UsersService {
+  // src/users/users.service.ts
+  async findByEmpresa(empresaId: number) {
+    return this.userRepository.find({
+      where: { empresa: { id: empresaId } },
+      relations: ['empresa'], // opcional, si quieres la info de la empresa
+    });
+  }
+
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
@@ -62,4 +70,6 @@ export class UsersService {
     }
     return this.userRepository.remove(user);
   }
+
+
 }

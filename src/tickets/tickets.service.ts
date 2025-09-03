@@ -236,17 +236,10 @@ export class TicketsService {
         console.log('✅ TI actualiza prioridad a:', updateTicketDto.prioridad);
       }
 
-    } if (archivoNombres) {
-      const adjuntosExistentes = await this.historyRepo.count({
-        where: { ticket: { id: ticket.id }, adjuntoNombre: Not(IsNull()) },
-      });
-
-      if (adjuntosExistentes >= 3) {
-        throw new BadRequestException('Máximo 3 archivos adjuntos permitidos');
-      }
-
+    } if (archivoNombres && archivoNombres.length > 0) {
       cambios.adjuntoNombre = archivoNombres;
     }
+
 
     if (Object.keys(cambios).length > 0 ||
       updateTicketDto.message ||
@@ -267,7 +260,7 @@ export class TicketsService {
         ;
       console.log('📜 Historial guardado:', historial);
     }
- 
+
 
     return this.ticketRepo.save(ticket);
 
