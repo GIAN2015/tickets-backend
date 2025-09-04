@@ -71,5 +71,11 @@ export class UsersService {
     return this.userRepository.remove(user);
   }
 
+  async updateSmtpPassword(id: number, smtpPassword: string) {
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) throw new NotFoundException('Usuario no encontrado');
 
+    user.smtpPassword = smtpPassword; // 👉 Idealmente encriptar aquí
+    return this.userRepository.save(user);
+  }
 }

@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, Delete, Param, ParseIntPipe, UseGuards, Req, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Controller, Post, Body, Get, Delete, Param, ParseIntPipe, UseGuards, Req, NotFoundException, BadRequestException, ForbiddenException, Put } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
@@ -72,7 +72,13 @@ export class UsersController {
     // ✅ Devuelve SOLO los usuarios de esa empresa
     return this.usersService.findByEmpresa(user.empresaId);
   }
-
+  @Put(':id/smtp-password')
+  async updateSmtpPassword(
+    @Param('id') id: number,
+    @Body('smtpPassword') smtpPassword: string,
+  ): Promise<any> {
+    return this.usersService.updateSmtpPassword(id, smtpPassword);
+  }
 
 
 }

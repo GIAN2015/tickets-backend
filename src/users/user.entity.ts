@@ -39,13 +39,14 @@ export class User {
   @JoinColumn({ name: 'empresaId' })
   empresa: Empresa;
 
-  @Column({nullable:true})
+  @Column({ nullable: true })
   empresaId: number; // 👈 clave foránea para identificar la empresa
 
   // 🔗 Relación con Tickets creados
   @OneToMany(() => Ticket, (ticket) => ticket.creator)
   createdTickets: Ticket[];
-
+  @Column({ nullable: true })
+  smtpPassword?: string;
   // 🔗 Relación con Tickets asignados
   @OneToMany(() => Ticket, (ticket) => ticket.assignedTo)
   assignedTickets: Ticket[];

@@ -7,6 +7,7 @@ import { EmpresasModule } from './empresas/empresas.module';
 import { APP_GUARD } from '@nestjs/core';
 
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
+import { MailModule } from './mail.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
       entities: [__dirname + '/**/*.entity{.ts,.js}'],
       synchronize: true,
     }),
+    MailModule,
     AuthModule,
     UsersModule,
     TicketsModule,
