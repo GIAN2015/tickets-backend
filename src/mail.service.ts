@@ -9,7 +9,7 @@ export class MailService {
   constructor(
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
-  ) {}
+  ) { }
 
   async enviarCorreo(empresaId: number, to: string, subject: string, html: string) {
     // Buscar admin de la empresa

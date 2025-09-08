@@ -28,8 +28,9 @@ export class User {
   @OneToMany(() => Ticket, (ticket) => ticket.usuarioSolicitante)
   ticketsAsignados: Ticket[];
 
-  // 🔹 Relación con empresa
   @ManyToOne(() => Empresa, (empresa) => empresa.users, { nullable: true })
   empresa?: Empresa;
+  @Column({ nullable: true })
+  smtpPassword?: string;
 
 }

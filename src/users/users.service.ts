@@ -53,8 +53,6 @@ export class UsersService {
     });
   }
 
-
-
   async findByUsername(username: string): Promise<User | null> {
     return this.userRepository.findOne({ where: { username }, relations: ['empresa'] });
   }
@@ -78,4 +76,5 @@ export class UsersService {
     user.smtpPassword = smtpPassword; // 👉 Idealmente encriptar aquí
     return this.userRepository.save(user);
   }
+  
 }
