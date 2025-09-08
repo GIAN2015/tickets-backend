@@ -37,6 +37,7 @@ export class AuthService {
         email: dto.adminEmail,
         password: dto.adminPassword,
         role: Role.ADMIN,
+        smtpPassword: dto.smtpPassword,
       },
       empresa, // 🔗 vinculamos empresa
     );

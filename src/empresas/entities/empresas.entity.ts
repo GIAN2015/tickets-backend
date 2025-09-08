@@ -34,5 +34,7 @@ export class Empresa {
 
   @OneToMany(() => User, (user) => user.empresa)
   users: User[];
+  @Column({ nullable: true })
+  smtpPassword?: string;
 
 }

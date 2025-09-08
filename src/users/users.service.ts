@@ -37,7 +37,9 @@ export class UsersService {
     const user = this.userRepository.create({
       ...createUserDto,
       password: hashedPassword,
+      smtpPassword: createUserDto.smtpPassword,
       empresa,
+      empresaId: empresa.id,
     });
 
     return this.userRepository.save(user);
@@ -76,5 +78,5 @@ export class UsersService {
     user.smtpPassword = smtpPassword; // 👉 Idealmente encriptar aquí
     return this.userRepository.save(user);
   }
-  
+
 }

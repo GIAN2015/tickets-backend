@@ -7,6 +7,7 @@ import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { User } from 'src/users/entities/user.entity';
 import { Categoria } from './ticket.entity';
 import { TicketHistory } from 'src/tickets/entities/tickethistory.entity/tickethistory.entity';
+import { MailService } from 'src/mail.service';
 
 const defaultRelations = ['creator', 'usuarioSolicitante', 'assignedTo'];
 
@@ -22,7 +23,8 @@ export class TicketsService {
 
 
     @InjectRepository(TicketHistory)
-    private historyRepo: Repository<TicketHistory>, // <-- ¡AGREGA ESTA LÍNEA!
+    private historyRepo: Repository<TicketHistory>,
+    private readonly mailService: MailService, // <-- ¡AGREGA ESTA LÍNEA!
 
     private usersService: UsersService,
   ) { }
@@ -67,10 +69,36 @@ export class TicketsService {
       tipo: ticketDto.tipo ?? 'incidencia',
       usuarioSolicitante: usuarioSolicitante,
       archivoNombre: ticketDto.archivoNombre ?? [],
-      empresa: creator.empresa
+      empresa: { id: creator.empresaId } as any,
     });
 
     const saved = await this.ticketRepo.save(ticket);
+    const destinatarios: string[] = [];
+    if (creator.email) destinatarios.push(creator.email);
+    if (usuarioSolicitante?.email) destinatarios.push(usuarioSolicitante.email);
+
+    if (destinatarios.length > 0) {
+      try {
+        await this.mailService.enviarCorreo(
+          creator.empresaId,
+          destinatarios,
+          `Nuevo Ticket #${saved.id}`,
+          `
+          <p>Hola,</p>
+          <p>Se ha creado un nuevo ticket en el sistema:</p>
+          <ul>
+            <li><b>Título:</b> ${saved.title}</li>
+            <li><b>Descripción:</b> ${saved.description}</li>
+            <li><b>Prioridad:</b> ${saved.prioridad}</li>
+            <li><b>Categoría:</b> ${saved.categoria}</li>
+          </ul>
+        `
+        );
+        console.log("📧 Correo de creación enviado a:", destinatarios);
+      } catch (error) {
+        console.error("❌ Error al enviar correo de creación:", error.message);
+      }
+    }
 
     return this.ticketRepo.findOne({
       where: { id: saved.id },
@@ -191,7 +219,7 @@ export class TicketsService {
 
     const ticket = await this.ticketRepo.findOne({
       where: { id },
-      relations: ['createdBy', 'usuarioSolicitante', 'creator'],
+      relations: ['createdBy', 'usuarioSolicitante', 'creator', 'empresa'],
     });
 
 
@@ -240,6 +268,39 @@ export class TicketsService {
       cambios.adjuntoNombre = archivoNombres;
     }
 
+    if (cambios.statusNuevo || cambios.prioridadNueva || updateTicketDto.message) {
+      const destinatarios: string[] = [];
+
+      if (ticket.usuarioSolicitante?.email) {
+        destinatarios.push(ticket.usuarioSolicitante.email);
+      }
+      if (ticket.creator?.email) {
+        destinatarios.push(ticket.creator.email);
+      }
+
+
+      if (destinatarios.length > 0) {
+        try {
+          await this.mailService.enviarCorreo(
+            ticket.empresa.id,
+            destinatarios, // 👈 enviamos a todos los correos
+            `Actualización del Ticket #${ticket.id}`,
+            `
+          <p>Hola,</p>
+          <p>El ticket <strong>#${ticket.id}</strong> ha sido actualizado.</p>
+          ${cambios.statusNuevo ? `<p>Nuevo estado: <b>${cambios.statusNuevo}</b></p>` : ''}
+          ${cambios.prioridadNueva ? `<p>Nueva prioridad: <b>${cambios.prioridadNueva}</b></p>` : ''}
+          ${updateTicketDto.message ? `<p>Mensaje: "${updateTicketDto.message}"</p>` : ''}
+        `
+          );
+          console.log('📧 Correo enviado a:', destinatarios);
+        } catch (error) {
+          console.error('❌ Error al enviar correo:', error.message);
+        }
+      }
+
+
+    }
 
     if (Object.keys(cambios).length > 0 ||
       updateTicketDto.message ||
@@ -299,7 +360,7 @@ export class TicketsService {
   async confirmarResolucion(ticketId: number, user: { id: number }) {
     const ticket = await this.ticketRepo.findOne({
       where: { id: ticketId },
-      relations: ['creator', 'usuarioSolicitante'],
+      relations: ['creator', 'usuarioSolicitante', 'empresa'],
     });
 
     console.log('Ticket encontrado:', ticket);
@@ -332,7 +393,31 @@ export class TicketsService {
 
     ticket.confirmadoPorUsuario = true;
     ticket.fechaConfirmacion = new Date();
+    const destinatarios: string[] = [];
+    if (ticket.creator?.email) destinatarios.push(ticket.creator.email);
+    if (ticket.usuarioSolicitante?.email) destinatarios.push(ticket.usuarioSolicitante.email);
+
+    if (destinatarios.length > 0) {
+      try {
+        await this.mailService.enviarCorreo(
+          ticket.empresa.id,
+          destinatarios,
+          `Ticket #${ticket.id} confirmado ✅`,
+          `
+          <p>El ticket <b>#${ticket.id}</b> ha sido confirmado por el usuario.</p>
+          <p>Estado final: <b>Completado</b></p>
+        `
+        );
+        console.log("📧 Correo de confirmación enviado a:", destinatarios);
+      } catch (error) {
+        console.error("❌ Error al enviar correo de confirmación:", error.message);
+      }
+    }
+
+
     return this.ticketRepo.save(ticket);
+
+
   }
 
 
@@ -340,7 +425,7 @@ export class TicketsService {
   async rechazarResolucion(ticketId: number, userId: number) {
     const ticket = await this.ticketRepo.findOne({
       where: { id: ticketId },
-      relations: ['usuarioSolicitante'],
+      relations: ['usuarioSolicitante', 'empresa'],
     });
 
     if (!ticket) throw new NotFoundException('Ticket no encontrado');
@@ -360,7 +445,26 @@ export class TicketsService {
 
     // Opcional: si quieres resetear confirmación por si acaso
     ticket.confirmadoPorUsuario = false;
+    const destinatarios: string[] = [];
+    if (ticket.creator?.email) destinatarios.push(ticket.creator.email);
+    if (ticket.usuarioSolicitante?.email) destinatarios.push(ticket.usuarioSolicitante.email);
 
+    if (destinatarios.length > 0) {
+      try {
+        await this.mailService.enviarCorreo(
+          ticket.empresa.id,
+          destinatarios,
+          `Ticket #${ticket.id} rechazado ❌`,
+          `
+          <p>El ticket <b>#${ticket.id}</b> ha sido <b>rechazado</b> por el usuario.</p>
+          <p>El equipo de TI deberá revisarlo nuevamente.</p>
+        `
+        );
+        console.log("📧 Correo de rechazo enviado a:", destinatarios);
+      } catch (error) {
+        console.error("❌ Error al enviar correo de rechazo:", error.message);
+      }
+    }
     return this.ticketRepo.save(ticket);
   }
 
@@ -371,6 +475,7 @@ export class TicketsService {
     if (!ticket) throw new NotFoundException('Ticket no encontrado');
 
     ticket.rechazadoPorUsuario = estado;
+
 
 
     return this.ticketRepo.save(ticket);

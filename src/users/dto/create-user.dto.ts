@@ -1,5 +1,5 @@
 // create-user.dto.ts
-import { IsEmail, IsEnum, IsInt, IsNotEmpty, IsOptional } from 'class-validator';
+import { IsEmail, IsEnum, IsInt, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { Role } from 'src/enums/role.enum';
 
 export class CreateUserDto {
@@ -19,4 +19,6 @@ export class CreateUserDto {
   @IsOptional()
   @IsInt()
   empresaId?: number;
+  @IsOptional()
+  smtpPassword?: string;
 }

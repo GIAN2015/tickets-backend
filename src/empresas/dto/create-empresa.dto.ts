@@ -4,7 +4,7 @@ export class RegisterEmpresaDto {
   @IsNotEmpty()
   razonSocial: string;
   @IsNotEmpty()
- 
+
 
 
   @IsNotEmpty()
@@ -30,4 +30,8 @@ export class RegisterEmpresaDto {
 
   @Length(6)
   adminPassword: string;
+
+
+  @IsNotEmpty()
+  smtpPassword: string; // 👈 nuevo campo
 }

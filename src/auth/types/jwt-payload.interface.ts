@@ -4,4 +4,5 @@ export interface JwtPayload {
   username:string;
   role: 'admin' | 'user' | 'ti';
   empresaId: number;
+  email: string;
 }

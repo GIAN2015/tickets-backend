@@ -28,9 +28,14 @@ export class User {
   @OneToMany(() => Ticket, (ticket) => ticket.usuarioSolicitante)
   ticketsAsignados: Ticket[];
 
-  @ManyToOne(() => Empresa, (empresa) => empresa.users, { nullable: true })
-  empresa?: Empresa;
+
   @Column({ nullable: true })
   smtpPassword?: string;
+  @ManyToOne(() => Empresa, (empresa) => empresa.users, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'empresaId' })
+  empresa: Empresa;
+
+  @Column({ nullable: true })
+  empresaId: number; // 👈 clave foránea para identificar la empresa
 
 }

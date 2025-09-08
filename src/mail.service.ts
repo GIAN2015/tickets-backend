@@ -11,7 +11,7 @@ export class MailService {
     private readonly userRepo: Repository<User>,
   ) { }
 
-  async enviarCorreo(empresaId: number, to: string, subject: string, html: string) {
+  async enviarCorreo(empresaId: number, to: string | string[], subject: string, html: string) {
     // Buscar admin de la empresa
     const admin = await this.userRepo.findOne({
       where: { empresaId, role: UserRole.ADMIN },
@@ -20,22 +20,34 @@ export class MailService {
     if (!admin || !admin.smtpPassword) {
       throw new Error('El admin no tiene configurado su correo de envío');
     }
+    if (!empresaId) {
+      throw new Error('El ticket no tiene empresa asociada');
+    }
+
+
+    console.log("📧 Usando SMTP:", admin.email, admin.smtpPassword);
 
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
         user: admin.email,
-        pass: admin.smtpPassword,
+        pass: admin.smtpPassword.trim(), // quitar espacios
       },
     });
 
-    await transporter.sendMail({
-      from: `"${admin.username}" <${admin.email}>`,
-      to,
-      subject,
-      html,
-    });
-
-    return { success: true };
+    try {
+      const info = await transporter.sendMail({
+        from: `"${admin.username}" <${admin.email}>`,
+        to: Array.isArray(to) ? to.join(",") : to,
+        subject,
+        html,
+      });
+      console.log("✅ Correo enviado:", info);
+      return { success: true, info };
+    } catch (error) {
+      console.error("❌ Error al enviar correo:", error);
+      throw error;
+    }
   }
+
 }
