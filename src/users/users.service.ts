@@ -5,6 +5,7 @@ import { User } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { Empresa } from 'src/empresas/entities/empresas.entity';
 import * as bcrypt from 'bcrypt';
+import { UpdateUserDto } from './dto/update-user.dto';
 @Injectable()
 export class UsersService {
   // src/users/users.service.ts
@@ -76,6 +77,27 @@ export class UsersService {
     if (!user) throw new NotFoundException('Usuario no encontrado');
 
     user.smtpPassword = smtpPassword; // 👉 Idealmente encriptar aquí
+    return this.userRepository.save(user);
+  }
+
+  async update(id: number, updateUserDto: UpdateUserDto) {
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) throw new NotFoundException("Usuario no encontrado");
+
+    if (updateUserDto.password) {
+      const salt = await bcrypt.genSalt(10);
+      updateUserDto.password = await bcrypt.hash(updateUserDto.password, salt);
+    }
+
+    Object.assign(user, updateUserDto);
+    return this.userRepository.save(user);
+  }
+
+
+  async toggleUser(id: number) {
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+    user.isActive = !user.isActive;
     return this.userRepository.save(user);
   }
 

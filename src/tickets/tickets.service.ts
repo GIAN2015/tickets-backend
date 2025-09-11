@@ -278,7 +278,9 @@ export class TicketsService {
         destinatarios.push(ticket.creator.email);
       }
 
-
+      if (user?.email && !destinatarios.includes(user.email)) {
+        destinatarios.push(user.email);
+      }
       if (destinatarios.length > 0) {
         try {
           await this.mailService.enviarCorreo(
@@ -356,6 +358,46 @@ export class TicketsService {
       relations: ['creator', 'usuarioSolicitante'], // Asegúrate de tener esta relación en tu entidad
     });
   }
+  async aceptarTicket(ticketId: number, user: User) {
+    const ticket = await this.ticketRepo.findOne({
+      where: { id: ticketId },
+      relations: ['creator', 'usuarioSolicitante', 'empresa'],
+    });
+
+    if (!ticket) throw new NotFoundException('Ticket no encontrado');
+
+    if (ticket.usuarioSolicitante) {
+      throw new BadRequestException('Este ticket ya tiene un usuario solicitante asignado');
+    }
+
+    // ✅ El TI que acepta pasa a ser el usuarioSolicitante
+    ticket.usuarioSolicitante = user;
+
+    await this.ticketRepo.save(ticket);
+
+    // 📧 Notificar al creador que ya hay un TI asignado
+    if (ticket.creator?.email) {
+      try {
+        await this.mailService.enviarCorreo(
+          ticket.empresa.id,
+          [ticket.creator.email],
+          `Ticket #${ticket.id} aceptado 🎉`,
+          `
+        <p>Tu ticket <b>#${ticket.id}</b> ha sido aceptado por el equipo TI.</p>
+        <p>Encargado: <b>${user.username}</b> (${user.email})</p>
+      `
+        );
+      } catch (error) {
+        console.error("❌ Error enviando correo de aceptación:", error.message);
+      }
+    }
+
+    // ✅ Volvemos a buscar el ticket con todas sus relaciones actualizadas
+    return this.ticketRepo.findOne({
+      where: { id: ticketId },
+      relations: ['creator', 'usuarioSolicitante', 'empresa'],
+    });
+  }
 
   async confirmarResolucion(ticketId: number, user: { id: number }) {
     const ticket = await this.ticketRepo.findOne({
@@ -384,6 +426,7 @@ export class TicketsService {
     if (ticket.status !== 'resuelto') {
       throw new BadRequestException('Solo puedes confirmar tickets que están en estado resuelto');
     }
+
 
     if (ticket.confirmadoPorUsuario) {
       throw new BadRequestException('Ya confirmaste este ticket');

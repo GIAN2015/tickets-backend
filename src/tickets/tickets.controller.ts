@@ -35,6 +35,7 @@ import { extname } from 'path';
 import { MulterField } from '@nestjs/platform-express/multer/interfaces/multer-options.interface';
 import { JwtPayload } from 'src/auth/types/jwt-payload.interface';
 import { Ticket } from './entities/ticket.entity';
+import { Roles } from 'src/auth/decorators/public.decorator';
 
 @UseGuards(JwtAuthGuard)
 @Controller('tickets')
@@ -106,6 +107,20 @@ export class TicketsController {
   }
 
 
+  @Patch(':id/aceptar')
+  @Roles('ti') // 👈 Solo TI puede aceptar tickets
+  async aceptarTicket(
+    @Param('id') id: number,
+    @Req() req: RequestWithUser
+  ) {
+    const userEntity = await this.usersRepo.findOne({
+      where: { id: req.user.id },
+    });
+    if (!userEntity) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+    return this.ticketsService.aceptarTicket(id, userEntity);
+  }
 
 
   @Get()

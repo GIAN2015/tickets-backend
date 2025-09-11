@@ -37,5 +37,7 @@ export class User {
 
   @Column({ nullable: true })
   empresaId: number; // 👈 clave foránea para identificar la empresa
+  @Column({ default: true })
+  isActive: boolean;
 
 }

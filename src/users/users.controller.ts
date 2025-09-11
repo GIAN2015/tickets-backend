@@ -1,17 +1,18 @@
-import { Controller, Post, Body, Get, Delete, Param, ParseIntPipe, UseGuards, Req, NotFoundException, BadRequestException, ForbiddenException, Put } from '@nestjs/common';
+import { Controller, Post, Body, Get, Delete, Param, ParseIntPipe, UseGuards, Req, NotFoundException, BadRequestException, ForbiddenException, Put, Patch } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RequestWithUser } from 'src/common/interfaces/request-with-user.interface';
 
 import { EmpresasService } from 'src/empresas/empresas.service';
+import { UpdateUserDto } from './dto/update-user.dto';
 
+import { Roles } from 'src/auth/decorators/public.decorator';
 
 @Controller('users')
 export class UsersController {
 
   constructor(private readonly usersService: UsersService, private readonly empresasService: EmpresasService,) { }
-
   @UseGuards(JwtAuthGuard)
   @Post()
   async create(@Body() createUserDto: CreateUserDto, @Req() req: RequestWithUser) {
@@ -36,11 +37,13 @@ export class UsersController {
 
 
   @Get()
+  @Roles('admin')
   findAll() {
     return this.usersService.findAll();
   }
 
   @Delete(':id')
+  @Roles('admin')
   delete(@Param('id', ParseIntPipe) id: number) {
     return this.usersService.delete(id);
   }
@@ -80,5 +83,16 @@ export class UsersController {
     return this.usersService.updateSmtpPassword(id, smtpPassword);
   }
 
+
+  @Patch(':id')
+  @Roles('admin') // 👈 solo admins pueden editar
+  async update(@Param('id') id: number, @Body() updateUserDto: UpdateUserDto) {
+    return this.usersService.update(id, updateUserDto);
+  }
+  @Patch(':id/toggle')
+  @Roles('admin') // 👈 solo admins pueden editar
+  async toggleUser(@Param('id') id: number) {
+    return this.usersService.toggleUser(id);
+  }
 
 }

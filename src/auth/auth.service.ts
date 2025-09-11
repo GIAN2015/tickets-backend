@@ -64,6 +64,12 @@ export class AuthService {
     if (!passwordOk) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
+    // 🚨 Verificar si está activo
+    if (!user.isActive) {
+      throw new UnauthorizedException(
+        'Tu cuenta está deshabilitada. Contacta al administrador.',
+      );
+    }
 
     const payload = { sub: user.id, username: user.username, email: user.email, role: user.role, empresaId: user.empresa?.id };
     const token = await this.jwtService.signAsync(payload);
