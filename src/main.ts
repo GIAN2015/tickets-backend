@@ -15,7 +15,7 @@ async function bootstrap() {
 
   // Habilitar CORS
   app.enableCors({
-    origin: 'http://localhost:3000',
+    origin: ['https://tickets-front-orcin.vercel.app'],
     credentials: true,
   });
 
@@ -26,7 +26,7 @@ async function bootstrap() {
   const userRepo = app.get(getRepositoryToken(User));
   const existingAdmin = await userRepo.findOne({ where: { role: 'admin' } });
 
- 
+
 
   await app.listen(3001);
 }
