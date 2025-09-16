@@ -16,7 +16,7 @@ export class User {
   @Column()
   password: string;
 
-  @Column()
+  @Column({default : 'user'})
   role: 'admin' | 'user' | 'ti';
 
   @OneToMany(() => Ticket, (ticket) => ticket.creator)
