@@ -15,7 +15,7 @@ async function bootstrap() {
 
   // Habilitar CORS
   app.enableCors({
-    origin: ["https://tickets-front-orcin.vercel.app", // frontend vercel
+    origin: ["https://sistema-tickets.danyris.com", // frontend vercel
       "http://localhost:3000",],
     credentials: true,
   });
