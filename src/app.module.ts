@@ -23,7 +23,7 @@ import { RolesGuard } from './auth/guards/roles.guard';
           type: 'postgres',
           url: process.env.DATABASE_URL!,
           entities: [__dirname + '/**/*.entity{.ts,.js}'], // 👈 registra todas
-          autoLoadEntities: true,                         // opcional
+          autoLoadEntities: true,                         // opciona
           synchronize: false,
           ssl: { rejectUnauthorized: false },
           extra: { ssl: { rejectUnauthorized: false } },
