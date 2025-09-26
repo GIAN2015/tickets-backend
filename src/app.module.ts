@@ -1,7 +1,7 @@
 // src/app.module.ts
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 
 import { TicketsModule } from './tickets/tickets.module';
@@ -18,20 +18,28 @@ import { RolesGuard } from './auth/guards/roles.guard';
     ConfigModule.forRoot({ isGlobal: true }),
     TypeOrmModule.forRootAsync({
       useFactory: () => {
-        const isProd = process.env.NODE_ENV === 'production';
-        return {
-          type: 'postgres',
-          url: process.env.DATABASE_URL!,
-          entities: [__dirname + '/**/*.entity{.ts,.js}'], // 👈 registra todas
-          autoLoadEntities: true,                         // opciona
-          synchronize: false,
+        const url = process.env.DATABASE_URL;
+        const common = {
+          type: 'postgres' as const,
+          entities: [__dirname + '/**/*.entity{.ts,.js}'],
+          autoLoadEntities: true,
+          synchronize: false,      // 🔒 nunca en prod
+          migrationsRun: false,    // opcional
           ssl: { rejectUnauthorized: false },
-          extra: { ssl: { rejectUnauthorized: false } },
+        };
+        if (url) {
+          return { ...common, url };
+        }
+        return {
+          ...common,
+          host: process.env.DB_HOST,
+          port: parseInt(process.env.DB_PORT ?? '5432', 10),
+          username: process.env.DB_USERNAME,
+          password: process.env.DB_PASSWORD,
+          database: process.env.DB_NAME,
         };
       },
     }),
-
-
 
     MailModule,
     AuthModule,
@@ -44,4 +52,4 @@ import { RolesGuard } from './auth/guards/roles.guard';
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })
-export class AppModule { }
+export class AppModule {}
