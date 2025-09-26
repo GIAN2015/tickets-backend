@@ -468,46 +468,49 @@ export class TicketsService {
   async rechazarResolucion(ticketId: number, userId: number) {
     const ticket = await this.ticketRepo.findOne({
       where: { id: ticketId },
-      relations: ['usuarioSolicitante', 'empresa'],
+      relations: ['usuarioSolicitante', 'empresa', 'creator'], // 👈 agrega creator
     });
-
     if (!ticket) throw new NotFoundException('Ticket no encontrado');
-    if (ticket.usuarioSolicitante.id !== userId)
-      throw new ForbiddenException('No autorizado');
-    if (ticket.status !== 'resuelto')
-      throw new BadRequestException('El ticket no está resuelto');
-    if (ticket.rechazadoPorUsuario)
-      throw new BadRequestException('Ya lo rechazaste');
 
-    // Marca que el usuario rechazó la resolución
+    const esSolicitante = ticket.usuarioSolicitante && ticket.usuarioSolicitante.id === userId;
+    const esCreador = ticket.creator && ticket.creator.id === userId;
+
+    if (!esSolicitante && !esCreador) {
+      throw new ForbiddenException('No autorizado');
+    }
+
+    if (ticket.status !== 'resuelto') {
+      throw new BadRequestException('El ticket no está resuelto');
+    }
+    if (ticket.rechazadoPorUsuario) {
+      throw new BadRequestException('Ya lo rechazaste');
+    }
+
     ticket.rechazadoPorUsuario = true;
     ticket.fechaRechazo = new Date();
-
-    // Cambia el estado para que vuelva a revisión del personal de TI
-    ticket.status = 'en_espera'; // o el nombre que uses en tu enum de estados
-
-    // Opcional: si quieres resetear confirmación por si acaso
     ticket.confirmadoPorUsuario = false;
+
+    // 🔁 vuelve a un estado válido en tu flujo
+    ticket.status = 'en proceso'; // <- en vez de 'en_espera'
+
     const destinatarios: string[] = [];
     if (ticket.creator?.email) destinatarios.push(ticket.creator.email);
     if (ticket.usuarioSolicitante?.email) destinatarios.push(ticket.usuarioSolicitante.email);
 
-    if (destinatarios.length > 0) {
+    if (destinatarios.length) {
       try {
         await this.mailService.enviarCorreo(
           ticket.empresa.id,
           destinatarios,
           `Ticket #${ticket.id} rechazado ❌`,
-          `
-          <p>El ticket <b>#${ticket.id}</b> ha sido <b>rechazado</b> por el usuario.</p>
-          <p>El equipo de TI deberá revisarlo nuevamente.</p>
-        `
+          `<p>El ticket <b>#${ticket.id}</b> ha sido <b>rechazado</b> por el usuario.</p>
+         <p>El equipo de TI deberá revisarlo nuevamente.</p>`
         );
-        console.log("📧 Correo de rechazo enviado a:", destinatarios);
-      } catch (error) {
-        console.error("❌ Error al enviar correo de rechazo:", error.message);
+      } catch (e: any) {
+        console.error('❌ Error al enviar correo de rechazo:', e.message);
       }
     }
+
     return this.ticketRepo.save(ticket);
   }
 
