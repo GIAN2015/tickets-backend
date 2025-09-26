@@ -11,6 +11,7 @@ import { Ticket } from 'src/tickets/entities/ticket.entity';
 import { Empresa } from 'src/empresas/entities/empresas.entity';
 
 export enum UserRole {
+  SUPER_ADMI = 'super-admi',
   ADMIN = 'admin',
   USER = 'user',
   TI = 'ti',

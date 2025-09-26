@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, OneToMany, ManyToOne, JoinColumn } from 'typeorm';
 import { Ticket } from 'src/tickets/ticket.entity';
 import { Empresa } from 'src/empresas/entities/empresas.entity';
+import { Role } from 'src/enums/role.enum';
 
 @Entity()
 export class User {
@@ -16,8 +17,10 @@ export class User {
   @Column()
   password: string;
 
-  @Column({default : 'user'})
-  role: 'admin' | 'user' | 'ti';
+  // src/users/entities/user.entity.ts
+  @Column({ type: 'enum', enum: Role, default: Role.USER })
+  role: Role;
+
 
   @OneToMany(() => Ticket, (ticket) => ticket.creator)
   createdTickets: Ticket[];

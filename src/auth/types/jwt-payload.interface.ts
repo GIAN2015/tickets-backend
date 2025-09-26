@@ -2,7 +2,7 @@
 export interface JwtPayload {
   id: number;
   username:string;
-  role: 'admin' | 'user' | 'ti';
+  role: 'super-admi' | 'admin' | 'user' | 'ti';
   empresaId: number;
   email: string;
 }

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import * as nodemailer from 'nodemailer';
 import { User, UserRole } from 'src/users/user.entity';
 
@@ -14,7 +14,7 @@ export class MailService {
   async enviarCorreo(empresaId: number, to: string | string[], subject: string, html: string) {
     // Buscar admin de la empresa
     const admin = await this.userRepo.findOne({
-      where: { empresaId, role: UserRole.ADMIN },
+      where: { empresaId, role: In([UserRole.ADMIN, UserRole.SUPER_ADMI]) },
     });
 
     if (!admin || !admin.smtpPassword) {

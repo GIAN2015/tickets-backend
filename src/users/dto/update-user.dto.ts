@@ -1,4 +1,19 @@
-import { PartialType } from '@nestjs/mapped-types';
-import { CreateUserDto } from './create-user.dto';
+// update-user.dto.ts
+import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
 
-export class UpdateUserDto extends PartialType(CreateUserDto) {}
+export class UpdateUserDto {
+  @IsOptional()
+  @IsString()
+  username?: string;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @IsOptional()
+  @MinLength(6)
+  password?: string;
+
+  // ❌ role se elimina de aquí para que nunca lo toque este endpoint
+  // ❌ empresaId y smtpPassword también si no quieres que cualquiera lo edite
+}

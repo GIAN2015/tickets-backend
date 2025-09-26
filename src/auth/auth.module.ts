@@ -7,6 +7,7 @@ import { PassportModule } from '@nestjs/passport';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { AuthController } from './auth.controller';
 import { EmpresasModule } from 'src/empresas/empresas.module';
+import { RolesGuard } from './guards/roles.guard';
 
 
 @Module({
@@ -19,7 +20,7 @@ import { EmpresasModule } from 'src/empresas/empresas.module';
       signOptions: { expiresIn: '1d' },
     }),
   ],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, JwtStrategy, RolesGuard],
   controllers: [AuthController],
   exports: [AuthService],
 })

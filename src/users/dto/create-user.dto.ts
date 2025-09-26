@@ -12,7 +12,7 @@ export class CreateUserDto {
   @IsNotEmpty()
   password: string;
 
-  @IsEnum(Role, { message: 'Role must be admin, user, or ti' })
+  @IsEnum(Role, { message: 'Role must be super-admi, admin, user, or ti' })
   role: Role;
 
 

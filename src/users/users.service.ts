@@ -6,6 +6,10 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { Empresa } from 'src/empresas/entities/empresas.entity';
 import * as bcrypt from 'bcrypt';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateUserRoleDto } from 'src/auth/dto/update-user-role.dto';
+import { Role } from 'src/enums/role.enum';
+
+
 @Injectable()
 export class UsersService {
   // src/users/users.service.ts
@@ -80,24 +84,49 @@ export class UsersService {
     return this.userRepository.save(user);
   }
 
-  async update(id: number, updateUserDto: UpdateUserDto) {
-    const user = await this.userRepository.findOne({ where: { id } });
-    if (!user) throw new NotFoundException("Usuario no encontrado");
+  // users.service.ts
+  async update(id: number, dto: any) {
+    // 🔐 blindaje por si alguien intenta colar campos sensibles
+    delete dto?.role;
+    delete dto?.empresaId;
+    delete dto?.smtpPassword;
 
-    if (updateUserDto.password) {
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+
+    if (dto.password) {
       const salt = await bcrypt.genSalt(10);
-      updateUserDto.password = await bcrypt.hash(updateUserDto.password, salt);
+      dto.password = await bcrypt.hash(dto.password, salt);
     }
 
-    Object.assign(user, updateUserDto);
+    Object.assign(user, dto);
     return this.userRepository.save(user);
   }
+
 
 
   async toggleUser(id: number) {
     const user = await this.userRepository.findOne({ where: { id } });
     if (!user) throw new NotFoundException('Usuario no encontrado');
     user.isActive = !user.isActive;
+    return this.userRepository.save(user);
+  }
+
+  async setRole(id: number, dto: { role: Role }) {
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+
+    // 🚫 no permitir degradar al único super-admi
+    if (user.role === Role.SUPER_ADMI && dto.role !== Role.SUPER_ADMI) {
+      const totalSupers = await this.userRepository.count({
+        where: { role: Role.SUPER_ADMI },   // ✅ enum, no string
+      });
+      if (totalSupers <= 1) {
+        throw new BadRequestException('No puedes degradar al único super-admi del sistema');
+      }
+    }
+
+    user.role = dto.role; // dto.role ya es Role
     return this.userRepository.save(user);
   }
 

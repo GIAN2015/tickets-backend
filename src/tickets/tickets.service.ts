@@ -130,7 +130,7 @@ export class TicketsService {
 
     let tickets: Ticket[] = [];
 
-    if (user.role === 'admin' || user.role === 'ti') {
+    if (user.role === 'super-admi' || user.role === 'admin' || user.role === 'ti') {
       // Admin y TI ven todos los tickets de su empresa
       tickets = await this.ticketRepo.find({
         where: { empresa: { id: user.empresaId } },

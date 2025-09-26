@@ -8,6 +8,7 @@ import { EmpresasService } from 'src/empresas/empresas.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 
 import { Roles } from 'src/auth/decorators/public.decorator';
+import { UpdateUserRoleDto } from 'src/auth/dto/update-user-role.dto';
 
 @Controller('users')
 export class UsersController {
@@ -17,7 +18,7 @@ export class UsersController {
   @Post()
   async create(@Body() createUserDto: CreateUserDto, @Req() req: RequestWithUser) {
     const admin = req.user;
-    if (admin.role !== 'admin') {
+    if (admin.role !== 'admin' && admin.role !== 'super-admi') {
       throw new ForbiddenException('Solo un administrador puede crear usuarios');
     }
 
@@ -37,19 +38,20 @@ export class UsersController {
 
 
   @Get()
-  @Roles('admin')
+  @Roles('admin', 'super-admi')
   findAll() {
     return this.usersService.findAll();
   }
 
   @Delete(':id')
-  @Roles('admin')
+  @Roles('admin', 'super-admi')
   delete(@Param('id', ParseIntPipe) id: number) {
     return this.usersService.delete(id);
   }
 
   // src/users/users.controller.ts
   @UseGuards(JwtAuthGuard)
+  @Roles('super-admi')
   @Get('empresa')
   async getEmpresa(@Req() req: RequestWithUser) {
     const admin = req.user;
@@ -85,14 +87,21 @@ export class UsersController {
 
 
   @Patch(':id')
-  @Roles('admin') // 👈 solo admins pueden editar
+  @Roles('admin', 'super-admi') // 👈 solo admins pueden editar
   async update(@Param('id') id: number, @Body() updateUserDto: UpdateUserDto) {
     return this.usersService.update(id, updateUserDto);
   }
   @Patch(':id/toggle')
-  @Roles('admin') // 👈 solo admins pueden editar
+  @Roles('admin', 'super-admi') // 👈 solo admins pueden editar
   async toggleUser(@Param('id') id: number) {
     return this.usersService.toggleUser(id);
+  }
+
+  // users.controller.ts
+  @Patch(':id/role')
+  @Roles('admin', 'super-admi', 'ti')
+  async setRole(@Param('id') id: number, @Body() dto: UpdateUserRoleDto) {
+    return this.usersService.setRole(id, dto);
   }
 
 }

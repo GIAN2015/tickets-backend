@@ -25,9 +25,21 @@ async function bootstrap() {
 
   // 🔹 Seed inicial: crear admin por defecto si no existe
   const userRepo = app.get(getRepositoryToken(User));
-  const existingAdmin = await userRepo.findOne({ where: { role: 'admin' } });
+  const totalUsers = await userRepo.count();
 
+  if (totalUsers === 0) {
+    const hashedPassword = await bcrypt.hash('123456', 10);
+    const defaultUser = userRepo.create({
+      username: 'Super Admi',
+      email: 'giansinarahua@outlook.com',
+      password: hashedPassword,
+      role: 'super-admi',
+      isActive: true,
+    });
 
+    await userRepo.save(defaultUser);
+    console.log('Cuenta super-admi creada: giansinarahua@outlook.com / 123456');
+  }
 
   await app.listen(3001);
 }
