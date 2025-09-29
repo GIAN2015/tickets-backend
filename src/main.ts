@@ -1,29 +1,49 @@
+// src/main.ts
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
-import { getRepositoryToken } from '@nestjs/typeorm';
-import { User } from './users/entities/user.entity';
 import * as bcrypt from 'bcrypt';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { AppModule } from './app.module';
+import { User } from './users/entities/user.entity';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // 🧭 Prefijo global
+  app.setGlobalPrefix('api');
+
+  // 🧼 Pipes globales de validación
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
+
+  // 🧾 Archivos estáticos (adjuntos)
   app.useStaticAssets(join(__dirname, '..', 'tickets'), {
     prefix: '/tickets/',
   });
 
-  // Habilitar CORS
+  // 🌐 CORS (local + vercel)
   app.enableCors({
-    origin: ["https://sistema-tickets.danyris.com", // frontend vercel
-      "http://localhost:3000",],
+    origin: [
+      'http://localhost:3000',              // Frontend local
+      'https://sistema-tickets.danyris.com' // Frontend en Vercel
+    ],
     credentials: true,
+    methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+    allowedHeaders: [
+      'Authorization','Content-Type','Accept',
+      'X-Requested-With','X-CSRF-Token'
+    ],
+    exposedHeaders: ['Date','Content-Disposition'],
   });
 
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }));
-  app.setGlobalPrefix('api');
-
-  // 🔹 Seed inicial: crear admin por defecto si no existe
+  // 👤 Seed inicial: crear super-admin si la tabla está vacía
   const userRepo = app.get(getRepositoryToken(User));
   const totalUsers = await userRepo.count();
 
@@ -38,9 +58,12 @@ async function bootstrap() {
     });
 
     await userRepo.save(defaultUser);
-    console.log('Cuenta super-admi creada: giansinarahua@outlook.com / 123456');
+    console.log('✅ Cuenta super-admi creada: giansinarahua@outlook.com / 123456');
   }
 
+  // 🚀 Arrancar servidor
   await app.listen(3001);
+  console.log(`✅ API corriendo en http://localhost:3001/api`);
 }
+
 bootstrap();

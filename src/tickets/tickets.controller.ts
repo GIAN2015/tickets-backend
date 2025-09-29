@@ -36,6 +36,7 @@ import { MulterField } from '@nestjs/platform-express/multer/interfaces/multer-o
 import { JwtPayload } from 'src/auth/types/jwt-payload.interface';
 import { Ticket } from './entities/ticket.entity';
 import { Roles } from 'src/auth/decorators/public.decorator';
+import { SetSlaDto } from './dto/set-sla.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('tickets')
@@ -254,6 +255,16 @@ export class TicketsController {
     } else {
       return res.status(404).json({ message: 'Archivo no encontrado' });
     }
+  }
+  // src/tickets/tickets.controller.ts
+  @Patch(':id/sla')
+  @Roles('admin', 'super-admi')
+  async setSla(
+     @Param('id', ParseIntPipe) id: number, // ✅
+    @Body() dto: SetSlaDto,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.ticketsService.setSla(+id, dto, req.user as any);
   }
 
 }

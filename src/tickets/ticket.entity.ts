@@ -108,5 +108,22 @@ export class Ticket {
   })
   categoria: Categoria;
   updateBy: { empresaId: number | undefined; id: number; username: string; role: "admin" | "user" | "ti"; };
+  @Column({ type: 'int', nullable: true })
+  slaTotalMinutos?: number;
 
+  /** Momento en que empieza a correr el SLA */
+  @Column({ type: 'timestamptz', nullable: true })
+  slaStartAt?: Date;
+
+  /** Fin del tramo verde */
+  @Column({ type: 'timestamptz', nullable: true })
+  slaGreenEndAt?: Date;
+
+  /** Fin del tramo amarillo (ahí empieza rojo) */
+  @Column({ type: 'timestamptz', nullable: true })
+  slaYellowEndAt?: Date;
+
+  /** Deadline final (fin del tramo rojo) */
+  @Column({ type: 'timestamptz', nullable: true })
+  deadlineAt?: Date;
 }

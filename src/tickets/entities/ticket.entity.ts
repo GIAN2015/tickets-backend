@@ -103,5 +103,21 @@ export class Ticket {
     default: Categoria.OTROS,
   })
   categoria: Categoria;
+  // src/tickets/entities/ticket.entity.ts
+  // agrega:
+  @Column({ type: 'int', nullable: true })
+  slaTotalMinutos?: number;           // p. ej. 5 días => 7200 min
+
+  @Column({ type: 'timestamptz', nullable: true })
+  slaStartAt?: Date;                  // cuándo empezó a correr el SLA (cuando admin lo fija)
+
+  @Column({ type: 'timestamptz', nullable: true })
+  slaGreenEndAt?: Date;               // fin tramo verde
+
+  @Column({ type: 'timestamptz', nullable: true })
+  slaYellowEndAt?: Date;              // fin tramo amarillo (empieza rojo)
+
+  @Column({ type: 'timestamptz', nullable: true })
+  deadlineAt?: Date;                  // fin tramo rojo (deadline final)
 
 }

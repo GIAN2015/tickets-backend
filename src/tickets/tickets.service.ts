@@ -526,6 +526,47 @@ export class TicketsService {
 
     return this.ticketRepo.save(ticket);
   }
+  // src/tickets/tickets.service.ts
+  async setSla(
+    ticketId: number,
+    dto: { dias: number; greenPct?: number; yellowPct?: number; redPct?: number },
+    admin: User, // úsalo para validar rol si quieres aquí o en guard
+  ) {
+    const t = await this.ticketRepo.findOne({ where: { id: ticketId }, relations: ['empresa'] });
+    if (!t) throw new NotFoundException('Ticket no encontrado');
+
+    // (sobran si pones @Roles en controller)
+    if (admin.role !== 'admin' && admin.role !== 'super-admi') {
+      throw new ForbiddenException('Solo admin puede fijar SLA');
+    }
+
+    // porcentajes por defecto 60% / 30% / 10%
+    const gp = dto.greenPct ?? 0.6;
+    const yp = dto.yellowPct ?? 0.3;
+    const rp = dto.redPct ?? 0.1;
+
+    // normaliza por si vienen imperfectos (sumar a 1)
+    const totalPct = gp + yp + rp || 1;
+    const greenPct = gp / totalPct;
+    const yellowPct = yp / totalPct;
+    const redPct = rp / totalPct;
+
+    const totalMin = dto.dias * 24 * 60;
+    const start = new Date(); // empieza a correr cuando el admin lo fija
+
+    const greenEndMs = start.getTime() + Math.round(totalMin * greenPct) * 60_000;
+    const yellowEndMs = start.getTime() + Math.round(totalMin * (greenPct + yellowPct)) * 60_000;
+    const deadlineMs = start.getTime() + totalMin * 60_000;
+
+    t.slaTotalMinutos = totalMin;
+    t.slaStartAt = start;
+    t.slaGreenEndAt = new Date(greenEndMs);
+    t.slaYellowEndAt = new Date(yellowEndMs);
+    t.deadlineAt = new Date(deadlineMs);
+
+    await this.ticketRepo.save(t);
+    return t;
+  }
 
 
 }
