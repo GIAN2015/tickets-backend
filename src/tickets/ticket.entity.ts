@@ -11,6 +11,7 @@ import {
 import { User } from 'src/users/entities/user.entity';
 import { TicketHistory } from 'src/tickets/entities/tickethistory.entity/tickethistory.entity';
 import { Empresa } from 'src/empresas/entities/empresas.entity';
+
 export enum Categoria {
   MANTENIMIENTO = 'MANTENIMIENTO',
   HARDWARE = 'HARDWARE',
@@ -35,31 +36,43 @@ export class Ticket {
 
   @CreateDateColumn()
   createdAt: Date;
-  @Column({ nullable: true })
-  statusAnterior?: string;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
+
   @Column({ nullable: true })
   startedAt?: Date;
 
   @Column({ default: 'media' })
   prioridad: 'muy_bajo' | 'bajo' | 'media' | 'alta' | 'muy_alta';
 
-  @Column() // <-- Agregado explícitamente
+  /* ===== CREATOR ===== */
+  @Column()
   creatorId: number;
 
-  @ManyToOne(() => User, (user) => user.createdTickets)
+  @ManyToOne(() => User, (user) => user.createdTickets, { eager: true })
   @JoinColumn({ name: 'creatorId' })
   creator: User;
 
-  @ManyToOne(() => User, (user) => user.assignedTickets, { nullable: true })
-  assignedTo?: User;
+  /* ===== ASIGNADO A (TI) ===== */
+  @ManyToOne(() => User, (user) => user.assignedTickets, { nullable: true, eager: true })
+  @JoinColumn({ name: 'assignedToId' })            // 👈 nombre de la columna FK
+  assignedTo?: User | null;
+
+  @Column({ type: 'int', nullable: true })         // 👈 columna real en DB
+  assignedToId?: number | null;
 
 
+  /* ===== USUARIO SOLICITANTE (cliente/solicitante) ===== */
+  @Column({ nullable: true })
+  usuarioSolicitanteId?: number;
 
+  // OJO: en User la inversa debe ser "ticketsSolicitados"
+  @ManyToOne(() => User, (user) => user.ticketsSolicitados, { nullable: true, eager: true })
+  @JoinColumn({ name: 'usuarioSolicitanteId' })
+  usuarioSolicitante?: User;
 
-  @UpdateDateColumn()
-  updatedAt: Date;
-
-  // Después del campo 'status' o donde consideres conveniente
+  /* ===== OTROS CAMPOS ===== */
   @Column({ default: 'incidencia' })
   tipo: 'requerimiento' | 'incidencia' | 'consulta';
 
@@ -67,25 +80,13 @@ export class Ticket {
   confirmadoPorUsuario: boolean;
 
   @Column({ nullable: true })
-  fechaConfirmacion: Date; // opcional
+  fechaConfirmacion?: Date;
 
   @Column({ default: false })
   rechazadoPorUsuario: boolean;
 
-
   @Column({ nullable: true })
-  fechaRechazo: Date; // opcional
-
-  @Column({ nullable: true })
-  usuarioSolicitanteId: number;
-
-  @ManyToOne(() => User, (user) => user.ticketsAsignados, { eager: true, nullable: true })
-  @JoinColumn({ name: 'usuarioSolicitanteId' })
-  usuarioSolicitante: User;
-
-  @ManyToOne(() => User, user => user.createdTickets)
-  @JoinColumn({ name: 'created_by' })
-  createdBy: User;
+  fechaRechazo?: Date;
 
   @Column('simple-json', { nullable: true })
   archivoNombre?: string[];
@@ -94,36 +95,30 @@ export class Ticket {
   adjuntoNombre?: string[];
 
   @Column({ nullable: true })
-  message: string;
+  message?: string;
 
-  @OneToMany(() => TicketHistory, history => history.ticket)
+  @OneToMany(() => TicketHistory, (history) => history.ticket)
   histories: TicketHistory[];
 
-  @ManyToOne(() => Empresa, (empresa) => empresa.tickets, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Empresa, (empresa) => empresa.tickets, { onDelete: 'CASCADE', eager: true })
   empresa: Empresa;
 
-  @Column({
-    type: 'text', // SQLite no soporta enum nativo
-    default: Categoria.OTROS,
-  })
+  @Column({ type: 'text', default: Categoria.OTROS })
   categoria: Categoria;
-  updateBy: { empresaId: number | undefined; id: number; username: string; role: "admin" | "user" | "ti"; };
+
+  /* ===== SLA ===== */
   @Column({ type: 'int', nullable: true })
   slaTotalMinutos?: number;
 
-  /** Momento en que empieza a correr el SLA */
   @Column({ type: 'timestamptz', nullable: true })
   slaStartAt?: Date;
 
-  /** Fin del tramo verde */
   @Column({ type: 'timestamptz', nullable: true })
   slaGreenEndAt?: Date;
 
-  /** Fin del tramo amarillo (ahí empieza rojo) */
   @Column({ type: 'timestamptz', nullable: true })
   slaYellowEndAt?: Date;
 
-  /** Deadline final (fin del tramo rojo) */
   @Column({ type: 'timestamptz', nullable: true })
   deadlineAt?: Date;
 }

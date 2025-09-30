@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Not, Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Ticket } from 'src/tickets/ticket.entity';
 import { UsersService } from 'src/users/users.service';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
@@ -8,6 +8,7 @@ import { User } from 'src/users/entities/user.entity';
 import { Categoria } from './ticket.entity';
 import { TicketHistory } from 'src/tickets/entities/tickethistory.entity/tickethistory.entity';
 import { MailService } from 'src/mail.service';
+import { TicketTemplates } from 'src/mail/templates/tickets';
 
 const defaultRelations = ['creator', 'usuarioSolicitante', 'assignedTo'];
 
@@ -21,16 +22,15 @@ export class TicketsService {
     @InjectRepository(User)
     private userRepo: Repository<User>,
 
-
     @InjectRepository(TicketHistory)
     private historyRepo: Repository<TicketHistory>,
-    private readonly mailService: MailService, // <-- ¡AGREGA ESTA LÍNEA!
 
+    private readonly mailService: MailService,
     private usersService: UsersService,
   ) { }
 
   async create(ticketDto: {
-    archivoNombre?: string[]; // 👈 ahora array
+    archivoNombre?: string[];
     title: string;
     description: string;
     creatorId: number;
@@ -73,6 +73,8 @@ export class TicketsService {
     });
 
     const saved = await this.ticketRepo.save(ticket);
+
+    // 📩 Notificar a creador/solicitante
     const destinatarios: string[] = [];
     if (creator.email) destinatarios.push(creator.email);
     if (usuarioSolicitante?.email) destinatarios.push(usuarioSolicitante.email);
@@ -83,85 +85,109 @@ export class TicketsService {
           creator.empresaId,
           destinatarios,
           `Nuevo Ticket #${saved.id}`,
-          `
-          <p>Hola,</p>
-          <p>Se ha creado un nuevo ticket en el sistema:</p>
-          <ul>
-            <li><b>Título:</b> ${saved.title}</li>
-            <li><b>Descripción:</b> ${saved.description}</li>
-            <li><b>Prioridad:</b> ${saved.prioridad}</li>
-            <li><b>Categoría:</b> ${saved.categoria}</li>
-          </ul>
-        `
+          TicketTemplates.creado({
+            id: saved.id,
+            title: saved.title,
+            description: saved.description,
+            prioridad: saved.prioridad,
+            categoria: saved.categoria,
+          })
         );
-        console.log("📧 Correo de creación enviado a:", destinatarios);
-      } catch (error) {
-        console.error("❌ Error al enviar correo de creación:", error.message);
+        console.log('📧 Correo de creación enviado a:', destinatarios);
+      } catch (error: any) {
+        console.error('❌ Error al enviar correo de creación:', error.message);
       }
+    }
+
+    // 🛎️ EXTRA: Notificar a ADMINs (admin / super-admi) de la empresa
+    try {
+      const admins = await this.userRepo.find({
+        where: {
+          empresaId: creator.empresaId,
+          role: In(['admin', 'super-admi']),
+        },
+      });
+
+      // Evita duplicar si el admin es también el creador/solicitante
+      const adminEmails = (admins || [])
+        .map(a => a.email)
+        .filter(Boolean) as string[];
+
+      // quita los que ya notificaste arriba
+      const alreadyNotified = new Set(destinatarios);
+      const adminsToNotify = adminEmails.filter(e => !alreadyNotified.has(e));
+
+      if (adminsToNotify.length > 0) {
+        await this.mailService.enviarCorreo(
+          creator.empresaId,
+          adminsToNotify,
+          `Nuevo Ticket #${saved.id} en tu empresa`,
+          TicketTemplates.creado({
+            id: saved.id,
+            title: saved.title,
+            description: saved.description,
+            prioridad: saved.prioridad,
+            categoria: saved.categoria,
+          })
+        );
+        console.log('📧 Correo a ADMINs por ticket creado:', adminsToNotify);
+      }
+    } catch (e: any) {
+      console.error('❌ Error notificando a ADMINs (creación):', e.message || e);
     }
 
     return this.ticketRepo.findOne({
       where: { id: saved.id },
-      relations: ['creator',
+      relations: [
+        'creator',
         'usuarioSolicitante',
         'assignedTo',
         'empresa',
-        'histories', // 👈 ojo: en tu entity Ticket el campo es histories
-        'histories.actualizadoPor',],
+        'histories',
+        'histories.actualizadoPor',
+      ],
     });
-
   }
 
 
 
-  // tickets.service.ts
-  // tickets.service.ts
   async findAll(user: { id: number; role: string; empresaId?: number }) {
-    console.log(
-      'Buscando tickets para rol:',
-      user.role,
-      'ID:',
-      user.id,
-      'Empresa:',
-      user.empresaId,
-    );
-
-    const relations = ['creator', 'usuarioSolicitante', 'assignedTo'];
-
-    let tickets: Ticket[] = [];
-
-    if (user.role === 'super-admi' || user.role === 'admin' || user.role === 'ti') {
-      // Admin y TI ven todos los tickets de su empresa
-      tickets = await this.ticketRepo.find({
-        where: { empresa: { id: user.empresaId } },
-        relations,
-      });
-
-    } else if (user.role === 'user') {
-      // Los usuarios solo ven tickets donde son creator o usuarioSolicitante
-      tickets = await this.ticketRepo
-        .createQueryBuilder('ticket')
-        .leftJoinAndSelect('ticket.creator', 'creator')
-        .leftJoinAndSelect('ticket.usuarioSolicitante', 'usuarioSolicitante')
-        .leftJoinAndSelect('ticket.assignedTo', 'assignedTo')
-        .leftJoinAndSelect('ticket.histories', 'histories')
-        .leftJoinAndSelect('histories.actualizadoPor', 'actualizadoPor')
-        .where('ticket.empresaId = :empresaId', { empresaId: user.empresaId })
-        .andWhere(
-          '(creator.id = :id OR usuarioSolicitante.id = :id)',
-          { id: user.id },
-        )
+    if (user.role === 'super-admi' || user.role === 'admin') {
+      return this.ticketRepo.createQueryBuilder('t')
+        .leftJoinAndSelect('t.creator', 'creator')
+        .leftJoinAndSelect('t.usuarioSolicitante', 'usuarioSolicitante')
+        .leftJoinAndSelect('t.assignedTo', 'assignedTo')
+        .where('t."empresaId" = :empresaId', { empresaId: user.empresaId })
+        .orderBy('t."createdAt"', 'DESC')
         .getMany();
     }
 
-    return tickets;
+    if (user.role === 'ti') {
+      return this.ticketRepo.createQueryBuilder('t')
+        .leftJoinAndSelect('t.creator', 'creator')
+        .leftJoinAndSelect('t.usuarioSolicitante', 'usuarioSolicitante')
+        .leftJoinAndSelect('t.assignedTo', 'assignedTo')
+        .where('t."assignedToId" = :id', { id: user.id })
+        .andWhere('t."empresaId" = :empresaId', { empresaId: user.empresaId })
+        .orderBy('t."createdAt"', 'DESC')
+        .getMany();
+    }
+
+    if (user.role === 'user') {
+      return this.ticketRepo.createQueryBuilder('t')
+        .leftJoinAndSelect('t.creator', 'creator')
+        .leftJoinAndSelect('t.usuarioSolicitante', 'usuarioSolicitante')
+        .leftJoinAndSelect('t.assignedTo', 'assignedTo')
+        .leftJoinAndSelect('t.histories', 'histories')
+        .leftJoinAndSelect('histories.actualizadoPor', 'actualizadoPor')
+        .where('t."empresaId" = :empresaId', { empresaId: user.empresaId })
+        .andWhere('(creator.id = :id OR usuarioSolicitante.id = :id)', { id: user.id })
+        .orderBy('t."createdAt"', 'DESC')
+        .getMany();
+    }
+
+    return [];
   }
-
-
-
-
-
-
 
   async findByCreatorId(userId: number) {
     return this.ticketRepo.find({
@@ -171,29 +197,23 @@ export class TicketsService {
   }
 
   async findByAssignedId(userId: number) {
-    return this.ticketRepo
-      .createQueryBuilder('ticket')
-      .leftJoinAndSelect('ticket.creator', 'creator')
-      .leftJoinAndSelect('ticket.usuarioSolicitante', 'usuarioSolicitante')
-      .where('usuarioSolicitante.id = :id', { id: userId })
+    return this.ticketRepo.createQueryBuilder('t')
+      .leftJoinAndSelect('t.creator', 'creator')
+      .leftJoinAndSelect('t.usuarioSolicitante', 'usuarioSolicitante')
+      .leftJoinAndSelect('t.assignedTo', 'assignedTo')
+      .where('assignedTo.id = :id', { id: userId })
+      .orderBy('t.createdAt', 'DESC')
       .getMany();
   }
-
-
 
   async findOne(id: number) {
     const ticket = await this.ticketRepo.findOne({
       where: { id },
-      relations: ['creator', 'usuarioSolicitante', 'empresa'],
+      relations: ['creator', 'usuarioSolicitante', 'empresa', 'assignedTo'],
     });
-    if (!ticket) {
-      throw new NotFoundException(`Ticket con id ${id} no encontrado`);
-    }
-
-    // No se debe crear un registro de historial al consultar un ticket
+    if (!ticket) throw new NotFoundException(`Ticket con id ${id} no encontrado`);
     return ticket;
   }
-
 
   async assignToTicket(id: number, userId: number) {
     const ticket = await this.ticketRepo.findOneBy({ id });
@@ -204,109 +224,87 @@ export class TicketsService {
     return this.ticketRepo.save(ticket);
   }
 
-  async message(message: string, user: { id: number; username: string; role: "admin" | "user" | "ti"; }) {
+  async message(message: string, user: { id: number; username: string; role: 'admin' | 'user' | 'ti' }) {
     console.log('Mensaje recibido:', message);
   }
 
-
-
-
-  async update(id: number, updateTicketDto: UpdateTicketDto, user: User, archivoNombres?: string[]) {
-    console.log('Usuario que actualiza:', user);
-    console.log('DTO recibido:', updateTicketDto);
-
-    const cambios: Partial<TicketHistory> = {};
-
+  async update(
+    id: number,
+    updateTicketDto: UpdateTicketDto,
+    user: User,
+    archivoNombres?: string[],
+  ) {
+    // 1) Cargar ticket con relaciones existentes
     const ticket = await this.ticketRepo.findOne({
       where: { id },
-      relations: ['createdBy', 'usuarioSolicitante', 'creator', 'empresa'],
+      relations: ['creator', 'usuarioSolicitante', 'assignedTo', 'empresa'],
     });
+    if (!ticket) throw new NotFoundException('Ticket no encontrado');
 
+    // 2) Autorización
+    const isAdmin = user.role === 'admin' || user.role === 'super-admi';
+    const isCreator = ticket.creator?.id === user.id;
+    const isSolicitante = ticket.usuarioSolicitante?.id === user.id;
+    const isAssigned = ticket.assignedTo?.id === user.id;
 
-    if (!ticket) {
-      console.log('❌ Ticket no encontrado');
-      throw new NotFoundException('Ticket no encontrado');
+    if (!isAdmin && !isCreator && !isSolicitante && !isAssigned) {
+      throw new ForbiddenException('No autorizado a actualizar este ticket');
     }
 
-    console.log('Ticket encontrado:', ticket);
+    // 3) Cambios a registrar
+    const cambios: Partial<TicketHistory> = {};
 
-    console.log('CREATOR:', ticket.creator);
-    console.log('SOLICITANTE:', ticket.usuarioSolicitante);
-
-
-    if (user.role === 'user') {
-      if (!updateTicketDto.message && !archivoNombres) {
-        throw new ForbiddenException('Solo puedes agregar un mensaje o adjuntar un archivo');
-      }
+    if (updateTicketDto.status && updateTicketDto.status !== ticket.status) {
+      cambios.statusAnterior = ticket.status;
+      cambios.statusNuevo = updateTicketDto.status;
+      ticket.status = updateTicketDto.status;
     }
 
-
+    if (updateTicketDto.prioridad && updateTicketDto.prioridad !== ticket.prioridad) {
+      cambios.prioridadAnterior = ticket.prioridad;
+      cambios.prioridadNueva = updateTicketDto.prioridad;
+      ticket.prioridad = updateTicketDto.prioridad;
+    }
 
     if (updateTicketDto.message) {
       ticket.message = updateTicketDto.message;
     }
 
-    if (user.role === 'ti') {
-      if (updateTicketDto.status && updateTicketDto.status !== ticket.status) {
-        cambios.statusAnterior = ticket.status;
-        cambios.statusNuevo = updateTicketDto.status;
-
-        // Solo actualiza si cambió
-        ticket.status = updateTicketDto.status;
-        console.log('✅ TI actualiza status a:', updateTicketDto.status);
-      }
-
-      if (updateTicketDto.prioridad && updateTicketDto.prioridad !== ticket.prioridad) {
-        cambios.prioridadAnterior = ticket.prioridad;
-        cambios.prioridadNueva = updateTicketDto.prioridad;
-
-        ticket.prioridad = updateTicketDto.prioridad;
-        console.log('✅ TI actualiza prioridad a:', updateTicketDto.prioridad);
-      }
-
-    } if (archivoNombres && archivoNombres.length > 0) {
+    if (archivoNombres && archivoNombres.length > 0) {
       cambios.adjuntoNombre = archivoNombres;
     }
 
-    if (cambios.statusNuevo || cambios.prioridadNueva || updateTicketDto.message) {
+    // 4) Correo si hubo cambios
+    if (cambios.statusNuevo || cambios.prioridadNueva || updateTicketDto.message || cambios.adjuntoNombre) {
       const destinatarios: string[] = [];
 
-      if (ticket.usuarioSolicitante?.email) {
-        destinatarios.push(ticket.usuarioSolicitante.email);
-      }
-      if (ticket.creator?.email) {
-        destinatarios.push(ticket.creator.email);
-      }
+      if (ticket.creator?.email) destinatarios.push(ticket.creator.email);
+      if (ticket.usuarioSolicitante?.email) destinatarios.push(ticket.usuarioSolicitante.email);
+      if (ticket.assignedTo?.email) destinatarios.push(ticket.assignedTo.email);
+      if (user?.email && !destinatarios.includes(user.email)) destinatarios.push(user.email);
 
-      if (user?.email && !destinatarios.includes(user.email)) {
-        destinatarios.push(user.email);
-      }
-      if (destinatarios.length > 0) {
+      if (destinatarios.length) {
         try {
           await this.mailService.enviarCorreo(
             ticket.empresa.id,
-            destinatarios, // 👈 enviamos a todos los correos
+            destinatarios,
             `Actualización del Ticket #${ticket.id}`,
-            `
-          <p>Hola,</p>
-          <p>El ticket <strong>#${ticket.id}</strong> ha sido actualizado.</p>
-          ${cambios.statusNuevo ? `<p>Nuevo estado: <b>${cambios.statusNuevo}</b></p>` : ''}
-          ${cambios.prioridadNueva ? `<p>Nueva prioridad: <b>${cambios.prioridadNueva}</b></p>` : ''}
-          ${updateTicketDto.message ? `<p>Mensaje: "${updateTicketDto.message}"</p>` : ''}
-        `
+            TicketTemplates.actualizado({
+              id: ticket.id,
+              title: ticket.title ?? `Ticket #${ticket.id}`,
+              newStatus: cambios.statusNuevo,
+              newPrioridad: cambios.prioridadNueva,
+              message: updateTicketDto.message,
+            })
           );
-          console.log('📧 Correo enviado a:', destinatarios);
-        } catch (error) {
+        } catch (error: any) {
           console.error('❌ Error al enviar correo:', error.message);
         }
       }
-
-
     }
 
-    if (Object.keys(cambios).length > 0 ||
-      updateTicketDto.message ||
-      archivoNombres) {
+    // 5) Guardar historial
+    if (cambios.statusNuevo || cambios.prioridadNueva || updateTicketDto.message || cambios.adjuntoNombre) {
       const historial = this.historyRepo.create({
         ticket,
         prioridadAnterior: cambios.prioridadAnterior,
@@ -315,22 +313,15 @@ export class TicketsService {
         statusNuevo: cambios.statusNuevo,
         mensaje: updateTicketDto.message,
         actualizadoPor: { id: user.id } as any,
-        adjuntoNombre: archivoNombres && archivoNombres.length > 0 ? archivoNombres : [],
-
-
+        adjuntoNombre: cambios.adjuntoNombre ?? [],
       });
-      await this.historyRepo.save(historial)
-        ;
-      console.log('📜 Historial guardado:', historial);
+      await this.historyRepo.save(historial);
     }
 
-
+    // 6) Guardar ticket
     return this.ticketRepo.save(ticket);
-
-
-
-
   }
+
   async obtenerHistorial(ticketId: number) {
     const historial = await this.historyRepo.find({
       where: { ticket: { id: ticketId } },
@@ -341,7 +332,7 @@ export class TicketsService {
     return historial.map((h) => ({
       id: h.id,
       fecha: h.fecha,
-      email: h.actualizadoPor?.email ?? null, // 👈 devuelve solo email
+      email: h.actualizadoPor?.email ?? null,
       statusAnterior: h.statusAnterior,
       statusNuevo: h.statusNuevo,
       prioridadAnterior: h.prioridadAnterior,
@@ -351,13 +342,13 @@ export class TicketsService {
     }));
   }
 
-
   async findOneWithUser(id: number) {
     return this.ticketRepo.findOne({
       where: { id },
-      relations: ['creator', 'usuarioSolicitante'], // Asegúrate de tener esta relación en tu entidad
+      relations: ['creator', 'usuarioSolicitante'],
     });
   }
+
   async aceptarTicket(ticketId: number, user: User) {
     const ticket = await this.ticketRepo.findOne({
       where: { id: ticketId },
@@ -372,27 +363,26 @@ export class TicketsService {
 
     // ✅ El TI que acepta pasa a ser el usuarioSolicitante
     ticket.usuarioSolicitante = user;
-
     await this.ticketRepo.save(ticket);
 
-    // 📧 Notificar al creador que ya hay un TI asignado
+    // 📧 Notificar al creador
     if (ticket.creator?.email) {
       try {
         await this.mailService.enviarCorreo(
           ticket.empresa.id,
           [ticket.creator.email],
           `Ticket #${ticket.id} aceptado 🎉`,
-          `
-        <p>Tu ticket <b>#${ticket.id}</b> ha sido aceptado por el equipo TI.</p>
-        <p>Encargado: <b>${user.username}</b> (${user.email})</p>
-      `
+          TicketTemplates.aceptado(
+            { id: ticket.id, title: ticket.title ?? `Ticket #${ticket.id}` },
+            user.username,
+            user.email
+          )
         );
-      } catch (error) {
-        console.error("❌ Error enviando correo de aceptación:", error.message);
+      } catch (error: any) {
+        console.error('❌ Error enviando correo de aceptación:', error.message);
       }
     }
 
-    // ✅ Volvemos a buscar el ticket con todas sus relaciones actualizadas
     return this.ticketRepo.findOne({
       where: { id: ticketId },
       relations: ['creator', 'usuarioSolicitante', 'empresa'],
@@ -405,9 +395,6 @@ export class TicketsService {
       relations: ['creator', 'usuarioSolicitante', 'empresa'],
     });
 
-    console.log('Ticket encontrado:', ticket);
-    console.log('Usuario autenticado:', user);
-
     if (!ticket) {
       throw new NotFoundException('Ticket no encontrado');
     }
@@ -419,23 +406,17 @@ export class TicketsService {
       throw new ForbiddenException('No puedes confirmar este ticket');
     }
 
-
-    console.log('Estado del ticket:', ticket.status);
-    console.log('Confirmado por usuario:', ticket.confirmadoPorUsuario);
-
     if (ticket.status !== 'resuelto') {
       throw new BadRequestException('Solo puedes confirmar tickets que están en estado resuelto');
     }
 
-
     if (ticket.confirmadoPorUsuario) {
       throw new BadRequestException('Ya confirmaste este ticket');
     }
-    console.log('Tipo de confirmadoPorUsuario:', typeof ticket.confirmadoPorUsuario);
-    console.log('Valor de confirmadoPorUsuario:', ticket.confirmadoPorUsuario);
 
     ticket.confirmadoPorUsuario = true;
     ticket.fechaConfirmacion = new Date();
+
     const destinatarios: string[] = [];
     if (ticket.creator?.email) destinatarios.push(ticket.creator.email);
     if (ticket.usuarioSolicitante?.email) destinatarios.push(ticket.usuarioSolicitante.email);
@@ -446,29 +427,24 @@ export class TicketsService {
           ticket.empresa.id,
           destinatarios,
           `Ticket #${ticket.id} confirmado ✅`,
-          `
-          <p>El ticket <b>#${ticket.id}</b> ha sido confirmado por el usuario.</p>
-          <p>Estado final: <b>Completado</b></p>
-        `
+          TicketTemplates.confirmado({
+            id: ticket.id,
+            title: ticket.title ?? `Ticket #${ticket.id}`,
+          })
         );
-        console.log("📧 Correo de confirmación enviado a:", destinatarios);
-      } catch (error) {
-        console.error("❌ Error al enviar correo de confirmación:", error.message);
+        console.log('📧 Correo de confirmación enviado a:', destinatarios);
+      } catch (error: any) {
+        console.error('❌ Error al enviar correo de confirmación:', error.message);
       }
     }
 
-
     return this.ticketRepo.save(ticket);
-
-
   }
-
-
 
   async rechazarResolucion(ticketId: number, userId: number) {
     const ticket = await this.ticketRepo.findOne({
       where: { id: ticketId },
-      relations: ['usuarioSolicitante', 'empresa', 'creator'], // 👈 agrega creator
+      relations: ['usuarioSolicitante', 'empresa', 'creator'],
     });
     if (!ticket) throw new NotFoundException('Ticket no encontrado');
 
@@ -489,9 +465,7 @@ export class TicketsService {
     ticket.rechazadoPorUsuario = true;
     ticket.fechaRechazo = new Date();
     ticket.confirmadoPorUsuario = false;
-
-    // 🔁 vuelve a un estado válido en tu flujo
-    ticket.status = 'en proceso'; // <- en vez de 'en_espera'
+    ticket.status = 'en proceso';
 
     const destinatarios: string[] = [];
     if (ticket.creator?.email) destinatarios.push(ticket.creator.email);
@@ -503,8 +477,11 @@ export class TicketsService {
           ticket.empresa.id,
           destinatarios,
           `Ticket #${ticket.id} rechazado ❌`,
-          `<p>El ticket <b>#${ticket.id}</b> ha sido <b>rechazado</b> por el usuario.</p>
-         <p>El equipo de TI deberá revisarlo nuevamente.</p>`
+          TicketTemplates.rechazado({
+            id: ticket.id,
+            title: ticket.title ?? `Ticket #${ticket.id}`,
+            status: ticket.status,
+          })
         );
       } catch (e: any) {
         console.error('❌ Error al enviar correo de rechazo:', e.message);
@@ -514,45 +491,37 @@ export class TicketsService {
     return this.ticketRepo.save(ticket);
   }
 
-
   async actualizarRechazo(ticketId: number, estado: boolean) {
     const ticket = await this.ticketRepo.findOne({ where: { id: ticketId } });
-
     if (!ticket) throw new NotFoundException('Ticket no encontrado');
 
     ticket.rechazadoPorUsuario = estado;
-
-
-
     return this.ticketRepo.save(ticket);
   }
-  // src/tickets/tickets.service.ts
+
   async setSla(
     ticketId: number,
     dto: { dias: number; greenPct?: number; yellowPct?: number; redPct?: number },
-    admin: User, // úsalo para validar rol si quieres aquí o en guard
+    admin: User,
   ) {
     const t = await this.ticketRepo.findOne({ where: { id: ticketId }, relations: ['empresa'] });
     if (!t) throw new NotFoundException('Ticket no encontrado');
 
-    // (sobran si pones @Roles en controller)
     if (admin.role !== 'admin' && admin.role !== 'super-admi') {
       throw new ForbiddenException('Solo admin puede fijar SLA');
     }
 
-    // porcentajes por defecto 60% / 30% / 10%
     const gp = dto.greenPct ?? 0.6;
     const yp = dto.yellowPct ?? 0.3;
     const rp = dto.redPct ?? 0.1;
 
-    // normaliza por si vienen imperfectos (sumar a 1)
     const totalPct = gp + yp + rp || 1;
     const greenPct = gp / totalPct;
     const yellowPct = yp / totalPct;
     const redPct = rp / totalPct;
 
     const totalMin = dto.dias * 24 * 60;
-    const start = new Date(); // empieza a correr cuando el admin lo fija
+    const start = new Date();
 
     const greenEndMs = start.getTime() + Math.round(totalMin * greenPct) * 60_000;
     const yellowEndMs = start.getTime() + Math.round(totalMin * (greenPct + yellowPct)) * 60_000;
@@ -568,5 +537,76 @@ export class TicketsService {
     return t;
   }
 
+  async asignarTi(ticketId: number, tiUserId: number, admin: User) {
+    const ticket = await this.ticketRepo.findOne({
+      where: { id: ticketId },
+      relations: ['empresa', 'creator', 'usuarioSolicitante', 'assignedTo'],
+    });
+    if (!ticket) throw new NotFoundException('Ticket no encontrado');
+    if (admin.role !== 'admin' && admin.role !== 'super-admi') {
+      throw new ForbiddenException('No autorizado');
+    }
+
+    const ti = await this.userRepo.findOne({ where: { id: tiUserId } });
+    if (!ti) throw new NotFoundException('Usuario TI no encontrado');
+    if (ti.role !== 'ti') throw new BadRequestException('El usuario seleccionado no es TI');
+
+    if (ticket.empresa?.id && ti.empresaId && ticket.empresa.id !== ti.empresaId) {
+      throw new ForbiddenException('TI no pertenece a la misma empresa');
+    }
+
+    ticket.assignedTo = ti;
+    ticket.status = 'asignado';
+
+    await this.ticketRepo.save(ticket);
+
+    // 🔔 1) Avisar al TI asignado
+    try {
+      if (ti.email) {
+        await this.mailService.enviarCorreo(
+          ticket.empresa.id,
+          [ti.email],
+          `Te asignaron el Ticket #${ticket.id}`,
+          TicketTemplates.asignado(
+            { id: ticket.id, title: ticket.title ?? `Ticket #${ticket.id}` },
+            ti.username,
+            ti.email
+          )
+        );
+        console.log('📧 Notificación enviada al TI asignado:', ti.email);
+      }
+    } catch (e: any) {
+      console.error('❌ Error notificando al TI asignado:', e.message || e);
+    }
+
+    // 🔔 2) (Opcional) Avisar a creador y solicitante
+    try {
+      const notifDest = [
+        ticket.creator?.email,
+        ticket.usuarioSolicitante?.email,
+      ].filter(Boolean) as string[];
+
+      if (notifDest.length) {
+        await this.mailService.enviarCorreo(
+          ticket.empresa.id,
+          notifDest,
+          `Ticket #${ticket.id} asignado a ${ti.username}`,
+          TicketTemplates.asignado(
+            { id: ticket.id, title: ticket.title ?? `Ticket #${ticket.id}` },
+            ti.username,
+            ti.email
+          )
+        );
+        console.log('📧 Notificación a creador/solicitante:', notifDest);
+      }
+    } catch (e: any) {
+      console.error('❌ Error notificando a creador/solicitante:', e.message || e);
+    }
+
+    return this.ticketRepo.findOne({
+      where: { id: ticketId },
+      relations: ['creator', 'usuarioSolicitante', 'assignedTo', 'empresa'],
+    });
+  }
 
 }

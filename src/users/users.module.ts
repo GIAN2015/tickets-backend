@@ -7,10 +7,11 @@ import { UsersController } from './users.controller';
 
 import { EmpresasModule } from 'src/empresas/empresas.module';
 import { Empresa } from 'src/empresas/entities/empresas.entity';
+import { MailModule } from 'src/mail.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Empresa]), EmpresasModule
+    TypeOrmModule.forFeature([User, Empresa]), EmpresasModule, MailModule
     // Si llegas a necesitar AuthModule aquí y hay ciclo, usas forwardRef:
     // forwardRef(() => AuthModule),
     // EmpresasModule no es obligatorio importarlo aquí salvo que necesites usar su servicio

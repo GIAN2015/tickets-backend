@@ -37,6 +37,7 @@ import { JwtPayload } from 'src/auth/types/jwt-payload.interface';
 import { Ticket } from './entities/ticket.entity';
 import { Roles } from 'src/auth/decorators/public.decorator';
 import { SetSlaDto } from './dto/set-sla.dto';
+import { AssignTiDto } from './dto/assign-ti.dtos';
 
 @UseGuards(JwtAuthGuard)
 @Controller('tickets')
@@ -179,10 +180,6 @@ export class TicketsController {
     });
   }
 
-
-
-
-
   @Get(':id/historial')
   async getHistorial(@Param('id', ParseIntPipe) id: number) {
     return this.historyRepo.find({
@@ -260,11 +257,22 @@ export class TicketsController {
   @Patch(':id/sla')
   @Roles('admin', 'super-admi')
   async setSla(
-     @Param('id', ParseIntPipe) id: number, // ✅
+    @Param('id', ParseIntPipe) id: number, // ✅
     @Body() dto: SetSlaDto,
     @Req() req: RequestWithUser,
   ) {
     return this.ticketsService.setSla(+id, dto, req.user as any);
   }
 
+
+  @Patch(':id/asignar')
+  @Roles('admin', 'super-admi')
+  async asignarTi(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: AssignTiDto,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.ticketsService.asignarTi(id, body.userId, req.user as any);
+
+  }
 }

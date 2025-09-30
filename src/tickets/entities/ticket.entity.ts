@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { User } from 'src/users/entities/user.entity';
 import { TicketHistory } from 'src/tickets/entities/tickethistory.entity/tickethistory.entity';
+
 export enum Categoria {
   MANTENIMIENTO = 'MANTENIMIENTO',
   HARDWARE = 'HARDWARE',
@@ -20,7 +21,6 @@ export enum Categoria {
 
 @Entity()
 export class Ticket {
-  [x: string]: any;
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -36,57 +36,42 @@ export class Ticket {
   @CreateDateColumn()
   createdAt: Date;
 
+  @UpdateDateColumn()
+  updatedAt: Date;
+
   @Column({ nullable: true })
   startedAt?: Date;
 
   @Column({ default: 'media' })
   prioridad: 'muy_bajo' | 'bajo' | 'media' | 'alta' | 'muy_alta';
 
-  @Column() // <-- Agregado explícitamente
+  // --- Creador
+  @Column()
   creatorId: number;
 
-  @ManyToOne(() => User, (user) => user.createdTickets)
+  @ManyToOne(() => User, (user) => user.createdTickets, { eager: false })
   @JoinColumn({ name: 'creatorId' })
   creator: User;
 
-  @ManyToOne(() => User, (user) => user.assignedTickets, { nullable: true })
-  assignedTo?: User;
+  // --- TI asignado (¡clave!)
+  @ManyToOne(() => User, (user) => user.assignedTickets, { nullable: true, eager: true })
+  @JoinColumn({ name: 'assignedToId' })            // 👈 nombre de la columna FK
+  assignedTo?: User | null;
 
-  @OneToMany(() => Ticket, (ticket) => ticket.creator)
-  ticketsCreados: Ticket[];
+  @Column({ type: 'int', nullable: true })         // 👈 columna real en DB
+  assignedToId?: number | null;
 
-  @UpdateDateColumn()
-  updatedAt: Date;
-
-  // Después del campo 'status' o donde consideres conveniente
-
-  @Column({ default: false })
-  confirmadoPorUsuario: boolean;
-
+  // --- Usuario solicitante (usuario final)
   @Column({ nullable: true })
-  fechaConfirmacion: Date; // opcional
+  usuarioSolicitanteId: number | null;
 
-  @Column({ default: false })
-  rechazadoPorUsuario: boolean;
-
-
-  @Column({ nullable: true })
-  fechaRechazo: Date; // opcional
-
-  @Column({ nullable: true })
-  usuarioSolicitanteId: number;
-
-  @ManyToOne(() => User, (user) => user.ticketsAsignados, { eager: true, nullable: true })
+  @ManyToOne(() => User, (user) => user.ticketsSolicitados, { eager: false, nullable: true })
   @JoinColumn({ name: 'usuarioSolicitanteId' })
-  usuarioSolicitante: User;
+  usuarioSolicitante: User | null;
 
-
-  history: any;
-  user: any;
-
-  @ManyToOne(() => User, user => user.createdTickets)
-  @JoinColumn({ name: 'created_by' })
-  createdBy: User;
+  // ❌ Quitar esto (esta relación pertenece al User, no aquí)
+  // @OneToMany(() => Ticket, (ticket) => ticket.creator)
+  // ticketsCreados: Ticket[];
 
   @Column('simple-json', { nullable: true })
   archivoNombre?: string[];
@@ -94,30 +79,41 @@ export class Ticket {
   @Column({ nullable: true })
   message: string;
 
-  @OneToMany(() => TicketHistory, history => history.ticket)
+  @OneToMany(() => TicketHistory, (history) => history.ticket)
   histories: TicketHistory[];
 
-
   @Column({
-    type: 'text', // SQLite no soporta enum nativo
+    type: 'text',
     default: Categoria.OTROS,
   })
   categoria: Categoria;
-  // src/tickets/entities/ticket.entity.ts
-  // agrega:
+
+  // SLA
   @Column({ type: 'int', nullable: true })
-  slaTotalMinutos?: number;           // p. ej. 5 días => 7200 min
+  slaTotalMinutos?: number;
 
   @Column({ type: 'timestamptz', nullable: true })
-  slaStartAt?: Date;                  // cuándo empezó a correr el SLA (cuando admin lo fija)
+  slaStartAt?: Date;
 
   @Column({ type: 'timestamptz', nullable: true })
-  slaGreenEndAt?: Date;               // fin tramo verde
+  slaGreenEndAt?: Date;
 
   @Column({ type: 'timestamptz', nullable: true })
-  slaYellowEndAt?: Date;              // fin tramo amarillo (empieza rojo)
+  slaYellowEndAt?: Date;
 
   @Column({ type: 'timestamptz', nullable: true })
-  deadlineAt?: Date;                  // fin tramo rojo (deadline final)
+  deadlineAt?: Date;
 
+  // Confirmaciones
+  @Column({ default: false })
+  confirmadoPorUsuario: boolean;
+
+  @Column({ nullable: true })
+  fechaConfirmacion: Date;
+
+  @Column({ default: false })
+  rechazadoPorUsuario: boolean;
+
+  @Column({ nullable: true })
+  fechaRechazo: Date;
 }
