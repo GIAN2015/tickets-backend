@@ -8,9 +8,10 @@ import { Empresa } from 'src/empresas/entities/empresas.entity';
 
 import { TicketsController } from './tickets.controller';
 import { TicketsService } from './tickets.service';
-
+import { Notification } from 'src/notifications/entities/notification.entity';
 import { UsersService } from 'src/users/users.service';
 import { MailService } from 'src/mail.service';
+import { NotificationsService } from 'src/notifications/notifications.service';
 
 @Module({
   imports: [
@@ -19,13 +20,15 @@ import { MailService } from 'src/mail.service';
       TicketHistory,
       User,
       Empresa,
+      Notification,
     ]),
   ],
   controllers: [TicketsController],
   providers: [
     TicketsService,
     UsersService,   // <- usado por TicketsService
-    MailService,    // <- usado por TicketsService
+    MailService, 
+    NotificationsService,   // <- usado por TicketsService
   ],
   exports: [TicketsService],
 })

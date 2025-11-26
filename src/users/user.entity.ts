@@ -9,7 +9,7 @@ import {
 } from 'typeorm';
 import { Ticket } from 'src/tickets/entities/ticket.entity';
 import { Empresa } from 'src/empresas/entities/empresas.entity';
-
+import { Notification } from 'src/notifications/entities/notification.entity';
 export enum UserRole {
   SUPER_ADMI = 'super-admi',
   ADMIN = 'admin',
@@ -51,6 +51,9 @@ export class User {
   // 🔗 Relación con Tickets asignados
   @OneToMany(() => Ticket, (ticket) => ticket.assignedTo)
   assignedTickets: Ticket[];
-
+  // src/users/entities/user.entity.ts
+  // ...
+  @OneToMany(() => Notification, (n) => n.user)
+  notifications: Notification[];
   histories: any;
 }
