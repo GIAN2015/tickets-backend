@@ -1,11 +1,4 @@
-// src/notifications/notifications.controller.ts
-import {
-  Controller,
-  Get,
-  Patch,
-  UseGuards,
-  Req,
-} from '@nestjs/common';
+import { Controller, Get, Patch, UseGuards, Req } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RequestWithUser } from 'src/common/interfaces/request-with-user.interface';

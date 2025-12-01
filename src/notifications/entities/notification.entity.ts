@@ -1,53 +1,56 @@
-// src/notifications/entities/notification.entity.ts
 import {
-    Entity,
-    PrimaryGeneratedColumn,
-    Column,
-    ManyToOne,
-    CreateDateColumn,
-    JoinColumn,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  CreateDateColumn,
+  JoinColumn,
+  RelationId,
 } from 'typeorm';
-import { User } from 'src/users/entities/user.entity'; // ajusta el path si hace falta
+import { User } from 'src/users/entities/user.entity';
 import { Ticket } from 'src/tickets/ticket.entity';
 
 export type NotificationType =
-    | 'ticket_created'
-    | 'ticket_assigned'
-    | 'status_changed'
-    | 'comment_added'
-    | 'ticket_confirmed'
-    | 'ticket_rejected'
-    | 'sla_alert';
+  | 'ticket_created'
+  | 'ticket_assigned'
+  | 'status_changed'
+  | 'comment_added'
+  | 'ticket_confirmed'
+  | 'ticket_rejected'
+  | 'sla_alert';
 
-@Entity()
+@Entity('notification')
 export class Notification {
-    @PrimaryGeneratedColumn()
-    id: number;
+  @PrimaryGeneratedColumn()
+  id: number;
 
-    @Column()
-    userId: number;
+  /** Relación a user -> columna real en BD: userid */
+  @ManyToOne(() => User, { eager: false, nullable: false, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'userid' })
+  user: User;
 
-    @ManyToOne(() => User, { eager: false })
-    @JoinColumn({ name: 'userId' })
-    user: User;
+  /** ID derivado (no crea columna, solo lectura) */
+  @RelationId((n: Notification) => n.user)
+  userId: number;
 
+  /** Relación a ticket -> columna real en BD: ticketid */
+  @ManyToOne(() => Ticket, { eager: true, nullable: false, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'ticketid' })
+  ticket: Ticket;
 
-    @Column()
-    ticketId: number;
+  /** ID derivado (no crea columna, solo lectura) */
+  @RelationId((n: Notification) => n.ticket)
+  ticketId: number;
 
-    @ManyToOne(() => Ticket, { eager: true })
-    @JoinColumn({ name: 'ticketId' })
-    ticket: Ticket;
+  @Column({ type: 'varchar', length: 50 })
+  type: NotificationType;
 
-    @Column({ type: 'varchar' })
-    type: NotificationType;
+  @Column({ type: 'text' })
+  message: string;
 
-    @Column({ type: 'text' })
-    message: string;
+  @Column({ default: false })
+  isRead: boolean;
 
-    @Column({ default: false })
-    isRead: boolean;
-
-    @CreateDateColumn()
-    createdAt: Date;
+  @CreateDateColumn()
+  createdAt: Date;
 }

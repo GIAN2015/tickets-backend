@@ -8,7 +8,7 @@ const common = {
   entities: ['src/**/*.entity.ts', 'src/**/entities/**/*.ts', 'dist/**/*.entity.js'],
   migrations: ['src/migrations/*.ts', 'dist/migrations/*.js'],
   migrationsTableName: 'typeorm_migrations',
-  synchronize: false,
+  synchronize: true,
   logging: false,
 };
 
