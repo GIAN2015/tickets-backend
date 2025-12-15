@@ -17,6 +17,7 @@ import { TicketTemplates } from 'src/mail/templates/tickets';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { NotificationType } from 'src/notifications/entities/notification.entity';
 
+import { SetSlaDto } from './dto/set-sla.dto';
 const defaultRelations = ['creator', 'usuarioSolicitante', 'assignedTo'];
 
 @Injectable()
@@ -627,49 +628,54 @@ export class TicketsService {
     return this.ticketRepo.save(ticket);
   }
 
-  async setSla(
-    ticketId: number,
-    dto: { dias: number; greenPct?: number; yellowPct?: number; redPct?: number },
-    admin: User,
-  ) {
-    const t = await this.ticketRepo.findOne({
-      where: { id: ticketId },
-      relations: ['empresa'],
-    });
-    if (!t) throw new NotFoundException('Ticket no encontrado');
 
-    if (admin.role !== 'admin' && admin.role !== 'super-admi') {
-      throw new ForbiddenException('Solo admin puede fijar SLA');
-    }
 
-    const gp = dto.greenPct ?? 0.6;
-    const yp = dto.yellowPct ?? 0.3;
-    const rp = dto.redPct ?? 0.1;
+async setSla(ticketId: number, dto: SetSlaDto, admin: User) {
+  const t = await this.ticketRepo.findOne({
+    where: { id: ticketId },
+    relations: ['empresa'],
+  });
+  if (!t) throw new NotFoundException('Ticket no encontrado');
 
-    const totalPct = gp + yp + rp || 1;
-    const greenPct = gp / totalPct;
-    const yellowPct = yp / totalPct;
-    const redPct = rp / totalPct;
-
-    const totalMin = dto.dias * 24 * 60;
-    const start = new Date();
-
-    const greenEndMs =
-      start.getTime() + Math.round(totalMin * greenPct) * 60_000;
-    const yellowEndMs =
-      start.getTime() +
-      Math.round(totalMin * (greenPct + yellowPct)) * 60_000;
-    const deadlineMs = start.getTime() + totalMin * 60_000;
-
-    t.slaTotalMinutos = totalMin;
-    t.slaStartAt = start;
-    t.slaGreenEndAt = new Date(greenEndMs);
-    t.slaYellowEndAt = new Date(yellowEndMs);
-    t.deadlineAt = new Date(deadlineMs);
-
-    await this.ticketRepo.save(t);
-    return t;
+  if (admin.role !== 'admin' && admin.role !== 'super-admi') {
+    throw new ForbiddenException('Solo admin puede fijar SLA');
   }
+
+  const gp = dto.greenPct ?? 0.6;
+  const yp = dto.yellowPct ?? 0.3;
+  const rp = dto.redPct ?? 0.1;
+
+  const totalPct = gp + yp + rp || 1;
+  const greenPct = gp / totalPct;
+  const yellowPct = yp / totalPct;
+
+  // ✅ Acepta totalMinutos o dias
+  const totalMin =
+    dto.totalMinutos != null
+      ? Number(dto.totalMinutos)
+      : Number(dto.dias ?? 0) * 24 * 60;
+
+  if (!Number.isFinite(totalMin) || totalMin < 1) {
+    throw new BadRequestException('SLA inválido: define totalMinutos >= 1 o dias >= 1');
+  }
+
+  const start = new Date();
+
+  const greenEndMs = start.getTime() + Math.round(totalMin * greenPct) * 60_000;
+  const yellowEndMs =
+    start.getTime() + Math.round(totalMin * (greenPct + yellowPct)) * 60_000;
+  const deadlineMs = start.getTime() + totalMin * 60_000;
+
+  t.slaTotalMinutos = totalMin;
+  t.slaStartAt = start;
+  t.slaGreenEndAt = new Date(greenEndMs);
+  t.slaYellowEndAt = new Date(yellowEndMs);
+  t.deadlineAt = new Date(deadlineMs);
+
+  await this.ticketRepo.save(t);
+  return t;
+}
+
 
   async asignarTi(ticketId: number, tiUserId: number, admin: User) {
     const ticket = await this.ticketRepo.findOne({

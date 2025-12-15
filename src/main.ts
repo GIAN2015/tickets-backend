@@ -27,6 +27,14 @@ async function bootstrap() {
   app.useStaticAssets(join(__dirname, '..', 'tickets'), {
     prefix: '/tickets/',
   });
+app.useGlobalPipes(
+  new ValidationPipe({
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    transform: true,
+    transformOptions: { enableImplicitConversion: true },
+  }),
+);
 
   // 🌐 CORS (local + vercel)
   app.enableCors({
